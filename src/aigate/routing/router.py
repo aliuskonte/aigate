@@ -32,6 +32,6 @@ async def route_and_call(registry: ProviderRegistry, req: ChatRequest) -> ChatRe
     except KeyError as e:
         raise bad_request(f"Unknown provider: {target.provider}") from e
 
-    # Keep canonical request; adapters may use target.provider_model later.
-    # For MVP-skeleton, we just pass through req as-is.
-    return await adapter.chat_completions(req)
+    provider_req = req.model_copy(update={"model": target.provider_model})
+    resp = await adapter.chat_completions(provider_req)
+    return resp.model_copy(update={"model": f"{target.provider}:{target.provider_model}"})

@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
 
     qwen_api_key: str | None = None
-    qwen_base_url: str | None = None
+    qwen_base_url: str | None = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 
     # Storage/Redis (later iterations)
     database_url: str | None = None

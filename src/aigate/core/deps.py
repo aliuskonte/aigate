@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-from functools import lru_cache
+from fastapi import Request
 
+from aigate.core.config import get_settings
+from aigate.providers.qwen_adapter import QwenAdapter
 from aigate.providers.registry import ProviderRegistry
 
 
-@lru_cache
-def get_provider_registry() -> ProviderRegistry:
-    # MVP-skeleton: empty registry. Adapters are added in next iterations.
-    return ProviderRegistry()
+def get_provider_registry(request: Request) -> ProviderRegistry:
+    settings = get_settings()
+    registry = ProviderRegistry()
+
+    qwen_client = getattr(request.app.state, "qwen_http_client", None)
+    if qwen_client is not None and settings.qwen_api_key:
+        registry.register(QwenAdapter(client=qwen_client))
+
+    return registry
