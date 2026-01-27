@@ -1,19 +1,31 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import time
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from aigate.core.auth import AuthContext, get_auth_context
-from aigate.core.deps import get_provider_registry
+from aigate.core.deps import get_db_session, get_provider_registry
 from aigate.core.errors import not_implemented
 from aigate.core.logging import LogContext, with_context
 from aigate.domain.chat import ChatRequest, ChatResponse, Choice, Message
 from aigate.providers.registry import ProviderRegistry
-from aigate.routing.router import route_and_call
+from aigate.routing.router import parse_explicit_model, route_and_call
+from aigate.storage.repos import create_request_log, create_usage_event, get_markup_pct
 
 router = APIRouter()
 log = logging.getLogger(__name__)
+
+
+def _hash_request(body: ChatRequest) -> str:
+    payload = body.model_dump(mode="json")
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
 
 
 @router.post("/chat/completions", response_model=ChatResponse)
@@ -22,6 +34,7 @@ async def chat_completions(
     body: ChatRequest,
     auth: AuthContext = Depends(get_auth_context),
     registry: ProviderRegistry = Depends(get_provider_registry),
+    session: AsyncSession | None = Depends(get_db_session),
 ) -> ChatResponse:
     request_id = getattr(request.state, "request_id", None)
     logger = with_context(
@@ -32,10 +45,77 @@ async def chat_completions(
     if not registry.list_providers():
         raise not_implemented("No providers are registered yet")
 
-    logger.info("chat.completions.request", extra={"model": body.model})
-    resp = await route_and_call(registry, body)
-    logger.info("chat.completions.response", extra={"model": resp.model})
-    return resp
+    target = parse_explicit_model(body.model)
+    idem_key = request.headers.get("Idempotency-Key")
+    request_hash = _hash_request(body)
+
+    started = time.perf_counter()
+    status_code = 200
+    resp: ChatResponse | None = None
+
+    logger.info("chat.completions.request", extra={"provider": target.provider, "model": target.provider_model})
+    try:
+        resp = await route_and_call(registry, body)
+        return resp
+    except Exception as e:
+        # Best-effort capture of status code for ledger (FastAPI HTTPException has .status_code).
+        status_code = getattr(e, "status_code", 500)
+        raise
+    finally:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        logger.info(
+            "chat.completions.done",
+            extra={
+                "provider": target.provider,
+                "model": target.provider_model,
+                "status": status_code,
+                "latency_ms": latency_ms,
+            },
+        )
+
+        if session is not None and request_id:
+            try:
+                req_row = await create_request_log(
+                    session,
+                    request_id=str(request_id),
+                    org_id=auth.org_id,
+                    provider=target.provider,
+                    model=target.provider_model,
+                    status_code=int(status_code),
+                    latency_ms=latency_ms,
+                    request_hash=request_hash,
+                    idempotency_key=idem_key,
+                )
+
+                if resp is not None and resp.usage is not None:
+                    raw_cost = resp.usage.raw_cost
+                    billed_cost = resp.usage.billed_cost
+                    if raw_cost is not None and billed_cost is None:
+                        markup_pct = await get_markup_pct(
+                            session, org_id=auth.org_id, provider=target.provider, model=target.provider_model
+                        )
+                        billed_cost = (
+                            raw_cost * (Decimal("1") + markup_pct / Decimal("100"))
+                        ).quantize(Decimal("0.00000001"))
+                        resp.usage.billed_cost = billed_cost
+
+                    await create_usage_event(
+                        session,
+                        org_id=auth.org_id,
+                        request_db_id=req_row.id,
+                        provider=target.provider,
+                        model=target.provider_model,
+                        prompt_tokens=resp.usage.prompt_tokens,
+                        completion_tokens=resp.usage.completion_tokens,
+                        total_tokens=resp.usage.total_tokens,
+                        raw_cost=raw_cost,
+                        billed_cost=billed_cost,
+                        currency=resp.usage.currency,
+                    )
+
+                await session.commit()
+            except Exception:
+                await session.rollback()
 
 
 def make_echo_response(req: ChatRequest) -> ChatResponse:
