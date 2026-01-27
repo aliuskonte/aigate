@@ -12,6 +12,8 @@ redis = "*"
 sqlalchemy = "*"
 asyncpg = "*"
 alembic = "*"
+greenlet = "*"
+psycopg = {extras = ["binary"], version = "*"}
 
 [dev-packages]
 pytest = "*"

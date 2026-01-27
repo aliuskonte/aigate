@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from fastapi import Depends, Header
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from aigate.core.config import Settings, get_settings
+from aigate.core.deps import get_db_session
 from aigate.core.errors import unauthorized
+from aigate.storage.repos import get_active_api_key_by_hash, hash_api_key
 
 
 @dataclass(frozen=True)
@@ -26,17 +29,23 @@ def _parse_bearer(authorization: str | None) -> str | None:
     return value
 
 
-def get_auth_context(
+async def get_auth_context(
     authorization: str | None = Header(default=None, alias="Authorization"),
     settings: Settings = Depends(get_settings),
+    session: AsyncSession | None = Depends(get_db_session),
 ) -> AuthContext:
     api_key = _parse_bearer(authorization)
     if not api_key:
         raise unauthorized("Missing or invalid Authorization header")
 
-    # MVP-skeleton behaviour:
-    # - in dev/test: accept any bearer key and use a fixed org_id
-    # - in prod: real validation must be implemented via Postgres (api_keys table)
+    # Preferred behaviour: validate key via Postgres when configured.
+    if session is not None:
+        row = await get_active_api_key_by_hash(session, key_hash=hash_api_key(api_key))
+        if row is None:
+            raise unauthorized("Invalid API key")
+        return AuthContext(org_id=row.org_id, api_key=api_key)
+
+    # Fallback: dev/test without DB configured.
     if settings.aigate_env in ("dev", "test"):
         return AuthContext(org_id="dev-org", api_key=api_key)
 

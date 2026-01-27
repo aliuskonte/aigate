@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from aigate.core.config import get_settings
 from aigate.providers.qwen_adapter import QwenAdapter
@@ -16,3 +17,16 @@ def get_provider_registry(request: Request) -> ProviderRegistry:
         registry.register(QwenAdapter(client=qwen_client))
 
     return registry
+
+
+async def get_db_session(request: Request):
+    sessionmaker = getattr(request.app.state, "db_sessionmaker", None)
+    if sessionmaker is None:
+        yield None
+        return
+
+    session: AsyncSession = sessionmaker()
+    try:
+        yield session
+    finally:
+        await session.close()
