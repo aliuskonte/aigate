@@ -1,0 +1,19 @@
+[requires]
+python_version = "3.11"
+
+[packages]
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+pydantic = "*"
+pydantic-settings = "*"
+python-dotenv = "*"
+httpx = "*"
+redis = "*"
+sqlalchemy = "*"
+asyncpg = "*"
+alembic = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-asyncio = "*"
+ruff = "*"
