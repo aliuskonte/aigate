@@ -20,9 +20,10 @@ class Settings(BaseSettings):
     qwen_api_key: str | None = None
     qwen_base_url: str | None = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 
-    # Storage/Redis (later iterations)
+    # Storage/Redis
     database_url: str | None = None
     redis_url: str | None = None
+    idempotency_ttl_seconds: int = 86400  # 24h
 
 
 @lru_cache

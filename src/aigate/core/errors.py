@@ -7,6 +7,10 @@ def bad_request(detail: str) -> HTTPException:
     return HTTPException(status_code=400, detail=detail)
 
 
+def conflict(detail: str = "Idempotency-Key already used with different request body") -> HTTPException:
+    return HTTPException(status_code=409, detail=detail)
+
+
 def unauthorized(detail: str = "Unauthorized") -> HTTPException:
     return HTTPException(status_code=401, detail=detail)
 

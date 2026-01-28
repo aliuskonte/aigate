@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
 
 import httpx
 from fastapi import FastAPI
@@ -14,6 +15,9 @@ from aigate.core.logging import configure_logging
 from aigate.core.middleware import RequestIdMiddleware
 from aigate.storage.db import create_engine, create_sessionmaker
 
+if TYPE_CHECKING:
+    from redis.asyncio import Redis
+
 log = logging.getLogger(__name__)
 
 
@@ -25,6 +29,7 @@ async def lifespan(app: FastAPI):
     qwen_client: httpx.AsyncClient | None = None
     db_engine: AsyncEngine | None = None
     db_sessionmaker: async_sessionmaker | None = None
+    redis_client: Redis | None = None
     if settings.qwen_api_key and settings.qwen_base_url:
         qwen_client = httpx.AsyncClient(
             base_url=settings.qwen_base_url,
@@ -38,11 +43,24 @@ async def lifespan(app: FastAPI):
         db_sessionmaker = create_sessionmaker(db_engine)
         app.state.db_engine = db_engine
         app.state.db_sessionmaker = db_sessionmaker
+
+    if settings.redis_url:
+        from redis.asyncio import Redis as RedisClient
+
+        redis_client = RedisClient.from_url(
+            settings.redis_url,
+            encoding="utf-8",
+            decode_responses=True,
+        )
+        app.state.redis = redis_client
+
     yield
     if qwen_client is not None:
         await qwen_client.aclose()
     if db_engine is not None:
         await db_engine.dispose()
+    if redis_client is not None:
+        await redis_client.aclose()
     log.info("app.stop")
 
 
