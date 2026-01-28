@@ -23,21 +23,63 @@ async def get_active_api_key_by_hash(session: AsyncSession, *, key_hash: str) ->
     return result.scalar_one_or_none()
 
 
-async def get_markup_pct(session: AsyncSession, *, org_id: str, provider: str, model: str) -> Decimal:
-    # Priority:
-    # 1) exact (org, provider, model)
-    # 2) provider default (org, provider, NULL)
-    # 3) global default (org, "qwen", NULL) etc. (not implemented yet)
+def _pick_price_rule(rows: list[PriceRule], model: str) -> PriceRule | None:
+    for row in rows:
+        if row.model is None or row.model == model:
+            return row
+    return None
+
+
+async def get_price_rule(
+    session: AsyncSession, *, org_id: str, provider: str, model: str
+) -> PriceRule | None:
+    """Best-matching price rule: exact (org, provider, model) then provider default (model=NULL)."""
     stmt = (
         select(PriceRule)
         .where(PriceRule.org_id == org_id, PriceRule.provider == provider)
         .order_by(PriceRule.model.is_(None), PriceRule.created_at.desc())
     )
     rows = (await session.execute(stmt)).scalars().all()
-    for row in rows:
-        if row.model is None or row.model == model:
-            return Decimal(row.markup_pct)
-    return Decimal("0")
+    return _pick_price_rule(list(rows), model)
+
+
+async def get_markup_pct(session: AsyncSession, *, org_id: str, provider: str, model: str) -> Decimal:
+    rule = await get_price_rule(session, org_id=org_id, provider=provider, model=model)
+    return Decimal(rule.markup_pct) if rule else Decimal("0")
+
+
+async def compute_billed_cost(
+    session: AsyncSession,
+    *,
+    org_id: str,
+    provider: str,
+    model: str,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+    raw_cost_from_provider: Decimal | None,
+) -> tuple[Decimal | None, Decimal | None]:
+    """
+    Return (raw_cost, billed_cost). When provider sends raw_cost: apply markup.
+    When raw_cost absent: use price_rule base prices (input/output per 1k) + markup if set.
+    """
+    rule = await get_price_rule(session, org_id=org_id, provider=provider, model=model)
+    markup_pct = Decimal(rule.markup_pct) if rule else Decimal("0")
+    mult = Decimal("1") + markup_pct / Decimal("100")
+
+    if raw_cost_from_provider is not None:
+        billed = (raw_cost_from_provider * mult).quantize(Decimal("0.00000001"))
+        return (raw_cost_from_provider, billed)
+
+    if rule is None or rule.input_price_per_1k is None or rule.output_price_per_1k is None:
+        return (None, None)
+
+    prompt = Decimal(prompt_tokens or 0)
+    completion = Decimal(completion_tokens or 0)
+    base = (prompt / 1000 * rule.input_price_per_1k + completion / 1000 * rule.output_price_per_1k).quantize(
+        Decimal("0.00000001")
+    )
+    billed = (base * mult).quantize(Decimal("0.00000001"))
+    return (None, billed)
 
 
 async def create_request_log(

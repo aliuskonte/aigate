@@ -59,6 +59,8 @@ class PriceRule(Base):
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     markup_pct: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, default=Decimal("0"))
+    input_price_per_1k: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    output_price_per_1k: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     org: Mapped[Organization] = relationship(back_populates="price_rules")
