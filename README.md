@@ -19,12 +19,6 @@ pipenv install --dev
 docker compose -f docker/docker-compose.yml up -d postgres redis
 ```
 
-Проверить, что сервисы поднялись:
-
-```bash
-docker compose -f docker/docker-compose.yml ps
-```
-
 ### 3) Переменные окружения
 
 Скопируй шаблон и заполни минимально нужные значения:

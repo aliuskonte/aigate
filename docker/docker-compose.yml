@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16
+    container_name: aigate-postgres
     environment:
       POSTGRES_DB: aigate
       POSTGRES_USER: postgres
@@ -17,6 +18,7 @@ services:
 
   redis:
     image: redis:7
+    container_name: aigate-redis
     ports:
       - "6379:6379"
     healthcheck:
