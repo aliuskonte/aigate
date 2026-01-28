@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
@@ -19,6 +20,8 @@ class Settings(BaseSettings):
 
     qwen_api_key: str | None = None
     qwen_base_url: str | None = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    qwen_default_input_price_per_1k: Decimal = Decimal("0.0005")
+    qwen_default_output_price_per_1k: Decimal = Decimal("0.001")
 
     # Storage/Redis
     database_url: str | None = None

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from aigate.core.config import get_settings
 from aigate.storage.db import create_engine, create_sessionmaker
 from aigate.storage.models import Organization, PriceRule
 
@@ -15,10 +16,6 @@ from aigate.storage.models import Organization, PriceRule
 def utcnow() -> datetime:
     return datetime.now(tz=timezone.utc)
 
-
-# Placeholder base prices (USD per 1k tokens). Replace with real provider prices.
-QWEN_DEFAULT_INPUT_PER_1K = Decimal("0.0005")
-QWEN_DEFAULT_OUTPUT_PER_1K = Decimal("0.001")
 
 DEFAULT_RULES = [
     {"provider": "qwen", "model": "qwen-turbo", "markup_pct": Decimal("0")},
@@ -38,6 +35,7 @@ async def main() -> None:
     if not database_url:
         raise SystemExit("DATABASE_URL is not set")
 
+    settings = get_settings()
     engine = create_engine(database_url=database_url)
     sessionmaker = create_sessionmaker(engine)
 
@@ -63,8 +61,8 @@ async def main() -> None:
                 provider=r["provider"],
                 model=r["model"],
                 markup_pct=r["markup_pct"],
-                input_price_per_1k=QWEN_DEFAULT_INPUT_PER_1K,
-                output_price_per_1k=QWEN_DEFAULT_OUTPUT_PER_1K,
+                input_price_per_1k=settings.qwen_default_input_price_per_1k,
+                output_price_per_1k=settings.qwen_default_output_price_per_1k,
                 created_at=utcnow(),
             )
             session.add(rule)
