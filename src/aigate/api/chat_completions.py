@@ -68,10 +68,25 @@ async def chat_completions(
     started = time.perf_counter()
     status_code = 200
     resp: ChatResponse | None = None
+    billed_raw_cost = None
+    billed_cost = None
 
     logger.info("chat.completions.request", extra={"provider": target.provider, "model": target.provider_model})
     try:
         resp = await route_and_call(registry, body)
+        if session is not None and resp is not None and resp.usage is not None:
+            billed_raw_cost, billed_cost = await compute_billed_cost(
+                session,
+                org_id=auth.org_id,
+                provider=target.provider,
+                model=target.provider_model,
+                prompt_tokens=resp.usage.prompt_tokens,
+                completion_tokens=resp.usage.completion_tokens,
+                raw_cost_from_provider=resp.usage.raw_cost,
+            )
+            if billed_cost is not None:
+                resp.usage.billed_cost = billed_cost
+
         if idem_key and redis and resp is not None:
             await set_cached_response(
                 redis,
@@ -116,18 +131,6 @@ async def chat_completions(
                 )
 
                 if resp is not None and resp.usage is not None:
-                    raw_cost, billed_cost = await compute_billed_cost(
-                        session,
-                        org_id=auth.org_id,
-                        provider=target.provider,
-                        model=target.provider_model,
-                        prompt_tokens=resp.usage.prompt_tokens,
-                        completion_tokens=resp.usage.completion_tokens,
-                        raw_cost_from_provider=resp.usage.raw_cost,
-                    )
-                    if billed_cost is not None:
-                        resp.usage.billed_cost = billed_cost
-
                     await create_usage_event(
                         session,
                         org_id=auth.org_id,
@@ -137,7 +140,7 @@ async def chat_completions(
                         prompt_tokens=resp.usage.prompt_tokens,
                         completion_tokens=resp.usage.completion_tokens,
                         total_tokens=resp.usage.total_tokens,
-                        raw_cost=raw_cost,
+                        raw_cost=billed_raw_cost,
                         billed_cost=billed_cost,
                         currency=resp.usage.currency,
                     )
