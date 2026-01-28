@@ -11,4 +11,3 @@ Pipfile.lock
 # optional local docs
 memory-bank/
 .c*
-README.md
