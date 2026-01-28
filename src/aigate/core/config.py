@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     database_url: str | None = None
     redis_url: str | None = None
     idempotency_ttl_seconds: int = 86400  # 24h
+    rate_limit_rpm_default: int = 60  # requests per minute per org
 
 
 @lru_cache

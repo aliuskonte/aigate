@@ -25,3 +25,13 @@ def bad_gateway(detail: str = "Bad gateway") -> HTTPException:
 
 def gateway_timeout(detail: str = "Gateway timeout") -> HTTPException:
     return HTTPException(status_code=504, detail=detail)
+
+
+def too_many_requests(
+    detail: str = "Rate limit exceeded",
+    retry_after_seconds: int | None = None,
+) -> HTTPException:
+    headers = {}
+    if retry_after_seconds is not None:
+        headers["Retry-After"] = str(retry_after_seconds)
+    return HTTPException(status_code=429, detail=detail, headers=headers or None)

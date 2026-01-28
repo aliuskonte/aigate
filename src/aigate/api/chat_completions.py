@@ -13,6 +13,7 @@ from aigate.core.auth import AuthContext, get_auth_context
 from aigate.core.config import get_settings
 from aigate.core.deps import get_db_session, get_provider_registry
 from aigate.core.errors import conflict, not_implemented
+from aigate.limits.rate_limit import check_rate_limit
 from aigate.core.logging import LogContext, with_context
 from aigate.domain.chat import ChatRequest, ChatResponse, Choice, Message
 from aigate.limits.idempotency import get_cached_response, set_cached_response
@@ -61,6 +62,9 @@ async def chat_completions(
         if isinstance(cached, ChatResponse):
             request.state.idempotency_restored = True
             return cached
+
+    if redis:
+        await check_rate_limit(redis, auth.org_id, settings.rate_limit_rpm_default)
 
     started = time.perf_counter()
     status_code = 200
