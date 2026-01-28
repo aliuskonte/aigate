@@ -92,7 +92,7 @@ curl -s \
   -X POST http://localhost:8000/v1/chat/completions \
   -H "Authorization: Bearer ${AIGATE_API_KEY}" \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen:qwen-turbo","messages":[{"role":"user","content":"Hi"}]}' | jq
+  -d '{"model":"qwen:qwen-flash","messages":[{"role":"user","content":"Hi"}]}' | jq
 ```
 
 Idempotency (тот же `Idempotency-Key` + тот же body → один и тот же ответ):
@@ -104,14 +104,14 @@ curl -s \
   -H "Authorization: Bearer ${AIGATE_API_KEY}" \
   -H "Idempotency-Key: ${IDEM_KEY}" \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen:qwen-turbo","messages":[{"role":"user","content":"Hi"}]}' | jq
+  -d '{"model":"qwen:qwen-flash","messages":[{"role":"user","content":"Hi"}]}' | jq
 
 curl -s \
   -X POST http://localhost:8000/v1/chat/completions \
   -H "Authorization: Bearer ${AIGATE_API_KEY}" \
   -H "Idempotency-Key: ${IDEM_KEY}" \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen:qwen-turbo","messages":[{"role":"user","content":"Hi"}]}' | jq
+  -d '{"model":"qwen:qwen-flash","messages":[{"role":"user","content":"Hi"}]}' | jq
 ```
 
 ## Примечания
@@ -121,4 +121,4 @@ curl -s \
 
 - **401 Unauthorized на `/v1/*`**: не передан `Authorization: Bearer ...` или не создан ключ (запусти `tools/seed_dev_api_key.py`).
 - **502/504 на `/v1/chat/completions`**: проверь `QWEN_API_KEY` и `QWEN_BASE_URL`.
-- **`GET /v1/models` иногда пустой/падает**: есть fallback allowlist на 502/504 (вернёт qwen-turbo/plus/max).  
+- **`GET /v1/models` иногда пустой/падает**: есть fallback allowlist на 502/504 (вернёт qwen-flash/plus/max).  

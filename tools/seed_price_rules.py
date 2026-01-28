@@ -18,6 +18,9 @@ def utcnow() -> datetime:
 
 
 DEFAULT_RULES = [
+    # Provider-default rule (model=NULL) applies to any qwen:* model unless overridden by a model-specific rule.
+    {"provider": "qwen", "model": None, "markup_pct": Decimal("0")},
+    {"provider": "qwen", "model": "qwen-flash", "markup_pct": Decimal("0")},
     {"provider": "qwen", "model": "qwen-turbo", "markup_pct": Decimal("0")},
     {"provider": "qwen", "model": "qwen-plus", "markup_pct": Decimal("0")},
     {"provider": "qwen", "model": "qwen-max", "markup_pct": Decimal("0")},
@@ -44,6 +47,7 @@ async def main() -> None:
         if org is None:
             raise SystemExit(f"Organization '{args.org_name}' not found. Create it first (e.g. seed_dev_api_key).")
 
+        inserted = 0
         for r in DEFAULT_RULES:
             existing = (
                 await session.execute(
@@ -66,10 +70,11 @@ async def main() -> None:
                 created_at=utcnow(),
             )
             session.add(rule)
+            inserted += 1
         await session.commit()
 
     await engine.dispose()
-    print(f"Seeded {len(DEFAULT_RULES)} price_rules for org '{args.org_name}'.")
+    print(f"Seeded {inserted} price_rules for org '{args.org_name}'.")
 
 
 if __name__ == "__main__":
