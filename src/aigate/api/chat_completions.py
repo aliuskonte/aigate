@@ -4,7 +4,6 @@ import hashlib
 import json
 import logging
 import time
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +18,7 @@ from aigate.domain.chat import ChatRequest, ChatResponse, Choice, Message
 from aigate.limits.idempotency import get_cached_response, set_cached_response
 from aigate.providers.registry import ProviderRegistry
 from aigate.routing.router import parse_explicit_model, route_and_call
-from aigate.storage.repos import create_request_log, create_usage_event, get_markup_pct
+from aigate.storage.repos import compute_billed_cost, create_request_log, create_usage_event
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -117,15 +116,16 @@ async def chat_completions(
                 )
 
                 if resp is not None and resp.usage is not None:
-                    raw_cost = resp.usage.raw_cost
-                    billed_cost = resp.usage.billed_cost
-                    if raw_cost is not None and billed_cost is None:
-                        markup_pct = await get_markup_pct(
-                            session, org_id=auth.org_id, provider=target.provider, model=target.provider_model
-                        )
-                        billed_cost = (
-                            raw_cost * (Decimal("1") + markup_pct / Decimal("100"))
-                        ).quantize(Decimal("0.00000001"))
+                    raw_cost, billed_cost = await compute_billed_cost(
+                        session,
+                        org_id=auth.org_id,
+                        provider=target.provider,
+                        model=target.provider_model,
+                        prompt_tokens=resp.usage.prompt_tokens,
+                        completion_tokens=resp.usage.completion_tokens,
+                        raw_cost_from_provider=resp.usage.raw_cost,
+                    )
+                    if billed_cost is not None:
                         resp.usage.billed_cost = billed_cost
 
                     await create_usage_event(
