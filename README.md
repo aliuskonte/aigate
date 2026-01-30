@@ -178,6 +178,20 @@ curl -s http://VPS_IP:8000/health
 
 Проксируй запросы на `http://127.0.0.1:8000`, настрой Let's Encrypt через certbot.
 
+### 6) CI/CD (автодеплой при push в main)
+
+Workflow `.github/workflows/deploy.yml`: тесты → SSH на VPS → `git pull` + `docker compose up`.
+
+**GitHub Secrets** (Settings → Secrets → Actions):
+
+| Secret | Описание |
+|--------|----------|
+| `SSH_HOST` | IP VPS (например 80.93.60.170) |
+| `SSH_USER` | Пользователь VPS |
+| `SSH_PRIVATE_KEY` | Приватный SSH-ключ для доступа к VPS |
+
+**На VPS:** настроить доступ к репо для `git pull` (HTTPS + токен или SSH deploy key).
+
 ## Примечания
 - Код в `src/aigate/` (src-layout).
 
