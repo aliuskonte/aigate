@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from aigate.domain.chat import ChatRequest, Message
+from aigate.domain.chat import ChatRequest, ImageUrl, ImageUrlPart, Message, TextPart
 from aigate.providers.qwen_adapter import QwenAdapter
 
 
@@ -51,6 +51,105 @@ async def test_qwen_adapter_maps_chat_completion() -> None:
     assert resp.model == "qwen-plus"
     assert resp.choices[0].message.content == "hello"
     assert resp.usage.total_tokens == 3
+
+
+@pytest.mark.asyncio
+async def test_qwen_adapter_vision_content_image_url() -> None:
+    """Vision: content as list with text + image_url (URL) is passed through to provider."""
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content.decode("utf-8"))
+        msgs = payload["messages"]
+        assert len(msgs) == 1
+        content = msgs[0]["content"]
+        assert isinstance(content, list)
+        assert content[0] == {"type": "text", "text": "What's in the image?"}
+        assert content[1]["type"] == "image_url"
+        assert content[1]["image_url"]["url"] == "https://example.com/img.png"
+
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-vl-1",
+                "created": 1735120033,
+                "model": "qwen-vl-max",
+                "choices": [
+                    {"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "A dog."}}
+                ],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 2, "total_tokens": 102},
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        headers={"Authorization": "Bearer test-key"},
+    ) as client:
+        adapter = QwenAdapter(client=client)
+        resp = await adapter.chat_completions(
+            ChatRequest(
+                model="qwen-vl-max",
+                messages=[
+                    Message(
+                        role="user",
+                        content=[
+                            TextPart(text="What's in the image?"),
+                            ImageUrlPart(image_url=ImageUrl(url="https://example.com/img.png")),
+                        ],
+                    )
+                ],
+            )
+        )
+
+    assert resp.choices[0].message.content == "A dog."
+
+
+@pytest.mark.asyncio
+async def test_qwen_adapter_vision_content_base64() -> None:
+    """Vision: image_url with data:image/...;base64,... is passed through."""
+    base64_data = "data:image/png;base64,iVBORw0KGgo="
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content.decode("utf-8"))
+        content = payload["messages"][0]["content"]
+        assert content[1]["image_url"]["url"] == base64_data
+
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-vl-2",
+                "created": 1735120033,
+                "model": "qwen-vl-max",
+                "choices": [
+                    {"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "ok"}}
+                ],
+                "usage": {"prompt_tokens": 50, "completion_tokens": 1, "total_tokens": 51},
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        headers={"Authorization": "Bearer test-key"},
+    ) as client:
+        adapter = QwenAdapter(client=client)
+        resp = await adapter.chat_completions(
+            ChatRequest(
+                model="qwen-vl-max",
+                messages=[
+                    Message(
+                        role="user",
+                        content=[
+                            TextPart(text="Describe"),
+                            ImageUrlPart(image_url=ImageUrl(url=base64_data)),
+                        ],
+                    )
+                ],
+            )
+        )
+
+    assert resp.choices[0].message.content == "ok"
 
 
 @pytest.mark.asyncio

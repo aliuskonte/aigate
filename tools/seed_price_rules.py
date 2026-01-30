@@ -24,6 +24,8 @@ DEFAULT_RULES = [
     {"provider": "qwen", "model": "qwen-turbo", "markup_pct": Decimal("0")},
     {"provider": "qwen", "model": "qwen-plus", "markup_pct": Decimal("0")},
     {"provider": "qwen", "model": "qwen-max", "markup_pct": Decimal("0")},
+    {"provider": "qwen", "model": "qwen-vl-max", "markup_pct": Decimal("0")},
+    {"provider": "qwen", "model": "qwen-vl-plus", "markup_pct": Decimal("0")},
 ]
 
 

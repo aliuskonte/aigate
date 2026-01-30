@@ -14,7 +14,7 @@ from aigate.core.deps import get_db_session, get_provider_registry
 from aigate.core.errors import conflict, not_implemented
 from aigate.limits.rate_limit import check_rate_limit
 from aigate.core.logging import LogContext, with_context
-from aigate.domain.chat import ChatRequest, ChatResponse, Choice, Message
+from aigate.domain.chat import ChatRequest, ChatResponse, Choice, Message, TextPart
 from aigate.limits.idempotency import get_cached_response, set_cached_response
 from aigate.providers.registry import ProviderRegistry
 from aigate.routing.router import parse_explicit_model, route_and_call
@@ -150,9 +150,18 @@ async def chat_completions(
                 await session.rollback()
 
 
+def _content_as_text(content: str | list) -> str:
+    """Extract text from content (str or list of parts) for display/echo."""
+    if isinstance(content, str):
+        return content
+    parts = [p.text for p in content if isinstance(p, TextPart)]
+    return " ".join(parts) if parts else ""
+
+
 def make_echo_response(req: ChatRequest) -> ChatResponse:
     # Handy for early local testing, not wired by default.
-    last_user = next((m.content for m in reversed(req.messages) if m.role == "user"), "")
+    last_user_content = next((m.content for m in reversed(req.messages) if m.role == "user"), "")
+    last_user = _content_as_text(last_user_content)
     return ChatResponse(
         model=req.model,
         choices=[

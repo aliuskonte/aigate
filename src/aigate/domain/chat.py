@@ -2,15 +2,38 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal, Union
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 
+class TextPart(BaseModel):
+    """OpenAI-compatible text content part."""
+
+    type: Literal["text"] = "text"
+    text: str
+
+
+class ImageUrl(BaseModel):
+    """Image URL: https://... or data:image/<type>;base64,..."""
+
+    url: str
+
+
+class ImageUrlPart(BaseModel):
+    """OpenAI-compatible image content part."""
+
+    type: Literal["image_url"] = "image_url"
+    image_url: ImageUrl
+
+
+ContentPart = Annotated[Union[TextPart, ImageUrlPart], Field(discriminator="type")]
+
+
 class Message(BaseModel):
     role: Literal["system", "user", "assistant"]
-    content: str
+    content: str | list[ContentPart]
 
 
 class ChatRequest(BaseModel):

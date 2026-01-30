@@ -114,6 +114,18 @@ curl -s \
   -d '{"model":"qwen:qwen-flash","messages":[{"role":"user","content":"Hi"}]}' | jq
 ```
 
+Vision (изображения): `content` может быть массивом частей (OpenAI-совместимый формат). Для vision используй модель `qwen:qwen-vl-max` или `qwen:qwen-vl-plus`:
+
+```bash
+curl -s \
+  -X POST http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer ${AIGATE_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen:qwen-vl-max","messages":[{"role":"user","content":[{"type":"text","text":"What is in the image?"},{"type":"image_url","image_url":{"url":"https://example.com/img.png"}}]}]}' | jq
+```
+
+Поддерживаются URL (`https://...`) и base64 (`data:image/jpeg;base64,...`).
+
 ## Примечания
 - Код в `src/aigate/` (src-layout).
 

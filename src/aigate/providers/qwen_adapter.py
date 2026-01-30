@@ -69,9 +69,16 @@ class QwenAdapter(ProviderAdapter):
         if req.stream:
             raise not_implemented("Streaming is not implemented in MVP yet")
 
+        def _serialize_content(content: str | list) -> str | list[dict[str, Any]]:
+            if isinstance(content, str):
+                return content
+            return [p.model_dump(mode="json") for p in content]
+
         payload: dict[str, Any] = {
             "model": req.model,
-            "messages": [{"role": m.role, "content": m.content} for m in req.messages],
+            "messages": [
+                {"role": m.role, "content": _serialize_content(m.content)} for m in req.messages
+            ],
         }
         if req.temperature is not None:
             payload["temperature"] = req.temperature
