@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
 
     qwen_api_key: str | None = None
-    qwen_base_url: str | None = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    qwen_base_url: str | None = "https://dashscope-us.aliyuncs.com/compatible-mode/v1"
     qwen_default_input_price_per_1k: Decimal = Decimal("0.0005")
     qwen_default_output_price_per_1k: Decimal = Decimal("0.001")
 
