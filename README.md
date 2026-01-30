@@ -143,7 +143,8 @@ PYTHONPATH=src pipenv run python tools/test_vision_local.py tests/img/*.jpeg -p 
 ### 1) На VPS: клонировать и настроить
 
 ```bash
-git clone <repo-url> AIGate && cd AIGate
+sudo mkdir -p /opt && sudo chown $USER:$USER /opt
+git clone <repo-url> /opt/AIGate && cd /opt/AIGate
 cp .env.example .env
 # Отредактируй .env: QWEN_API_KEY (обязательно), QWEN_BASE_URL при необходимости
 ```
@@ -180,7 +181,7 @@ curl -s http://VPS_IP:8000/health
 
 ### 6) CI/CD (автодеплой при push в main)
 
-Workflow `.github/workflows/deploy.yml`: тесты → SSH на VPS → `git pull` + `docker compose up`.
+Workflow `.github/workflows/deploy.yml`: тесты → SSH на VPS → `cd /opt/AIGate && git pull && docker compose up`.
 
 **GitHub Secrets** (Settings → Secrets → Actions):
 
