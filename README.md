@@ -16,7 +16,7 @@ pipenv install --dev
 Поднять Postgres и Redis:
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d postgres redis
+docker compose up -d postgres redis
 ```
 
 ### 3) Переменные окружения
@@ -151,7 +151,7 @@ cp .env.example .env
 ### 2) Запуск
 
 ```bash
-docker compose -f docker/docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 Миграции выполняются автоматически при старте контейнера. API доступен на порту 8000.
@@ -160,10 +160,10 @@ docker compose -f docker/docker-compose.prod.yml up -d --build
 
 ```bash
 # Создать org + API key (выведет ключ в stdout)
-docker compose -f docker/docker-compose.prod.yml exec aigate python tools/seed_dev_api_key.py --org-name dev-org
+docker compose -f docker-compose.prod.yml exec aigate python tools/seed_dev_api_key.py --org-name dev-org
 
 # Заполнить price_rules
-docker compose -f docker/docker-compose.prod.yml exec aigate python tools/seed_price_rules.py --org-name dev-org
+docker compose -f docker-compose.prod.yml exec aigate python tools/seed_price_rules.py --org-name dev-org
 ```
 
 Сохрани ключ из `seed_dev_api_key.py` и используй как `AIGATE_API_KEY` для клиентов.
@@ -183,7 +183,7 @@ curl -s http://VPS_IP:8000/health
 
 ## Troubleshooting
 
-- **500 Internal Server Error, ConnectionRefusedError в auth**: Postgres не запущен. Подними инфраструктуру: `docker compose -f docker/docker-compose.yml up -d postgres redis`. Проверь `DATABASE_URL` в `.env` (например `postgresql+asyncpg://postgres:postgres@localhost:5432/aigate`).
+- **500 Internal Server Error, ConnectionRefusedError в auth**: Postgres не запущен. Подними инфраструктуру: `docker compose up -d postgres redis`. Проверь `DATABASE_URL` в `.env` (например `postgresql+asyncpg://postgres:postgres@localhost:5432/aigate`).
 - **401 Unauthorized на `/v1/*`**: не передан `Authorization: Bearer ...` или не создан ключ (запусти `tools/seed_dev_api_key.py`).
 - **502/504 на `/v1/chat/completions`**: проверь `QWEN_API_KEY` и `QWEN_BASE_URL`. `QWEN_BASE_URL` должен соответствовать региону ключа (us/intl/cn). Vision: если `qwen-vl-max` не найден — попробуй `qwen3-vl-plus`.
 - **`GET /v1/models` иногда пустой/падает**: есть fallback allowlist на 502/504 (вернёт qwen-flash/plus/max).  
