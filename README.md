@@ -138,6 +138,46 @@ PYTHONPATH=src pipenv run python tools/test_vision_local.py tests/img/*.jpeg -p 
 
 Требуется `AIGATE_API_KEY` или `QWEN_API_KEY` в env.
 
+## Deploy на VPS (Docker Compose)
+
+### 1) На VPS: клонировать и настроить
+
+```bash
+git clone <repo-url> AIGate && cd AIGate
+cp .env.example .env
+# Отредактируй .env: QWEN_API_KEY (обязательно), QWEN_BASE_URL при необходимости
+```
+
+### 2) Запуск
+
+```bash
+docker compose -f docker/docker-compose.prod.yml up -d --build
+```
+
+Миграции выполняются автоматически при старте контейнера. API доступен на порту 8000.
+
+### 3) Сиды (один раз после первого запуска)
+
+```bash
+# Создать org + API key (выведет ключ в stdout)
+docker compose -f docker/docker-compose.prod.yml exec aigate python tools/seed_dev_api_key.py --org-name dev-org
+
+# Заполнить price_rules
+docker compose -f docker/docker-compose.prod.yml exec aigate python tools/seed_price_rules.py --org-name dev-org
+```
+
+Сохрани ключ из `seed_dev_api_key.py` и используй как `AIGATE_API_KEY` для клиентов.
+
+### 4) Проверка
+
+```bash
+curl -s http://VPS_IP:8000/health
+```
+
+### 5) Nginx + SSL (опционально)
+
+Проксируй запросы на `http://127.0.0.1:8000`, настрой Let's Encrypt через certbot.
+
 ## Примечания
 - Код в `src/aigate/` (src-layout).
 
