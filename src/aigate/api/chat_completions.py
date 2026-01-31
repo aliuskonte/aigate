@@ -12,6 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from aigate.core.auth import AuthContext, get_auth_context
 from aigate.core.config import get_settings
 from aigate.core.deps import get_db_session, get_provider_registry
+from aigate.core.metrics import (
+    aigate_billed_cost_total,
+    aigate_errors_total,
+    aigate_request_duration_seconds,
+    aigate_requests_total,
+)
 from aigate.core.errors import bad_request, conflict, not_implemented
 from aigate.limits.rate_limit import check_rate_limit
 from aigate.core.logging import LogContext, with_context
@@ -23,6 +29,15 @@ from aigate.storage.repos import compute_billed_cost, create_request_log, create
 
 router = APIRouter()
 log = logging.getLogger(__name__)
+
+
+def _status_label(code: int) -> str:
+    """Group status codes for metrics: 2xx, 4xx, 5xx."""
+    if 200 <= code < 300:
+        return "2xx"
+    if 400 <= code < 500:
+        return "4xx"
+    return "5xx"
 
 
 def _hash_request(body: ChatRequest) -> str:
@@ -82,6 +97,25 @@ async def chat_completions(
                 raise
             finally:
                 latency_ms = int((time.perf_counter() - started) * 1000)
+                latency_sec = latency_ms / 1000.0
+                status_label = _status_label(status_code)
+                aigate_requests_total.labels(
+                    provider=target.provider,
+                    model=target.provider_model,
+                    stream="true",
+                    status=status_label,
+                ).inc()
+                aigate_request_duration_seconds.labels(
+                    provider=target.provider,
+                    model=target.provider_model,
+                    stream="true",
+                ).observe(latency_sec)
+                if status_code >= 400:
+                    aigate_errors_total.labels(
+                        provider=target.provider,
+                        model=target.provider_model,
+                        status=status_label,
+                    ).inc()
                 logger.info(
                     "chat.completions.stream.done",
                     extra={
@@ -129,6 +163,11 @@ async def chat_completions(
                                 billed_cost=billed_cost,
                                 currency="USD",
                             )
+                            if billed_cost is not None:
+                                aigate_billed_cost_total.labels(
+                                    provider=target.provider,
+                                    model=target.provider_model,
+                                ).inc(float(billed_cost))
                         await session.commit()
                     except Exception:
                         await session.rollback()
@@ -189,6 +228,25 @@ async def chat_completions(
         raise
     finally:
         latency_ms = int((time.perf_counter() - started) * 1000)
+        latency_sec = latency_ms / 1000.0
+        status_label = _status_label(status_code)
+        aigate_requests_total.labels(
+            provider=target.provider,
+            model=target.provider_model,
+            stream="false",
+            status=status_label,
+        ).inc()
+        aigate_request_duration_seconds.labels(
+            provider=target.provider,
+            model=target.provider_model,
+            stream="false",
+        ).observe(latency_sec)
+        if status_code >= 400:
+            aigate_errors_total.labels(
+                provider=target.provider,
+                model=target.provider_model,
+                status=status_label,
+            ).inc()
         logger.info(
             "chat.completions.done",
             extra={
@@ -230,6 +288,11 @@ async def chat_completions(
                         billed_cost=billed_cost,
                         currency=resp.usage.currency,
                     )
+                    if billed_cost is not None:
+                        aigate_billed_cost_total.labels(
+                            provider=target.provider,
+                            model=target.provider_model,
+                        ).inc(float(billed_cost))
 
                 await session.commit()
             except Exception:

@@ -14,6 +14,7 @@ asyncpg = "*"
 alembic = "*"
 greenlet = "*"
 psycopg = {extras = ["binary"], version = "*"}
+prometheus-client = "*"
 
 [dev-packages]
 pytest = "*"
