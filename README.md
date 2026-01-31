@@ -193,6 +193,17 @@ Workflow `.github/workflows/deploy.yml`: тесты → SSH на VPS → `cd /op
 
 **На VPS:** настроить доступ к репо для `git pull` (HTTPS + токен или SSH deploy key).
 
+**Branch Protection для main** (деплой только при merge PR):
+
+1. GitHub → репо **aigate** → **Settings** → **Branches**
+2. **Add branch protection rule**
+3. Branch name pattern: `main`
+4. Включить: **Require a pull request before merging**
+5. Опционально: **Do not allow bypassing the above settings**
+6. **Create** / **Save changes**
+
+После этого изменения в `main` возможны только через merge PR, деплой срабатывает при merge.
+
 ## Примечания
 - Код в `src/aigate/` (src-layout).
 
