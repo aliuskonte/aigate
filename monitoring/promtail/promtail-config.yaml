@@ -5,7 +5,11 @@ positions:
   filename: /tmp/positions.yaml
 
 clients:
+  # Локальный Loki (по умолчанию)
   - url: http://loki:3100/loki/api/v1/push
+  # Grafana Cloud: замени на свой URL и раскомментируй bearer_token
+  # - url: https://logs-prod-025.grafana.net/loki/api/v1/push
+  #   bearer_token: "<LOKI_API_TOKEN>"
 
 scrape_configs:
   - job_name: docker
@@ -13,8 +17,13 @@ scrape_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 5s
     relabel_configs:
+      # Путь к логам контейнера (обязательно для чтения из filesystem)
+      - source_labels: ["__meta_docker_container_id"]
+        regex: "(.+)"
+        target_label: "__path__"
+        replacement: "/var/lib/docker/containers/$1/*-json.log"
       - source_labels: ["__meta_docker_container_name"]
         regex: "/(.*)"
         target_label: "container"
-      - source_labels: ["__meta_docker_container_log_stream"]
-        target_label: "logstream"
+    pipeline_stages:
+      - docker: {}  # парсит JSON-формат Docker (log, stream, attrs)
