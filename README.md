@@ -16,7 +16,7 @@ pipenv install --dev
 Поднять Postgres и Redis:
 
 ```bash
-docker compose up -d postgres redis
+docker compose -f docker-compose.dev.yml up -d postgres redis
 ```
 
 ### 3) Переменные окружения
@@ -162,7 +162,7 @@ cp .env.example .env
 ### 2) Запуск
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose up -d --build
 ```
 
 Миграции выполняются автоматически при старте контейнера. API доступен на порту 8000.
@@ -171,10 +171,10 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ```bash
 # Создать org + API key (выведет ключ в stdout)
-docker compose -f docker-compose.prod.yml exec aigate python tools/seed_dev_api_key.py --org-name dev-org
+docker compose exec aigate python tools/seed_dev_api_key.py --org-name dev-org
 
 # Заполнить price_rules
-docker compose -f docker-compose.prod.yml exec aigate python tools/seed_price_rules.py --org-name dev-org
+docker compose exec aigate python tools/seed_price_rules.py --org-name dev-org
 ```
 
 Сохрани ключ из `seed_dev_api_key.py` и используй как `AIGATE_API_KEY` для клиентов.
@@ -220,7 +220,7 @@ Workflow `.github/workflows/deploy.yml`: тесты → SSH на VPS → `cd /op
 
 1. Запустить приложение (создаёт сеть `aigate_monitoring`):
    ```bash
-   docker compose -f docker-compose.prod.yml up -d --build
+   docker compose up -d --build
    ```
 
 2. Запустить стек мониторинга:
@@ -249,12 +249,25 @@ Endpoint `/metrics` (Prometheus format):
 
 Promtail читает логи контейнеров из `/var/lib/docker/containers` и отправляет в Loki. AIGate пишет JSON в stdout.
 
+**На Mac (Docker Desktop):** `/var/lib/docker/containers` может быть недоступен (логи в VM). Логи в Loki появятся на Linux/VPS.
+
+### Grafana Cloud
+
+Для визуализации в Grafana Cloud задай в `.env`:
+
+- `LOKI_URL` — полный URL push (например `https://logs-prod-XXX.grafana.net/loki/api/v1/push`)
+- `PROMETHEUS_REMOTE_WRITE_URL` — URL remote_write (например `https://prometheus-prod-XX-prod-REGION.grafana.net/api/prom/push`)
+- `LOKI_API_TOKEN`, `PROMETHEUS_API_TOKEN` — токены из grafana.com → Stack → Details
+
+Логи и метрики будут отправляться в Grafana Cloud в дополнение к локальному Loki/Prometheus.
+
 ## Примечания
 - Код в `src/aigate/` (src-layout).
 
 ## Troubleshooting
 
-- **500 Internal Server Error, ConnectionRefusedError в auth**: Postgres не запущен. Подними инфраструктуру: `docker compose up -d postgres redis`. Проверь `DATABASE_URL` в `.env` (например `postgresql+asyncpg://postgres:postgres@localhost:5432/aigate`).
+- **500 Internal Server Error, ConnectionRefusedError в auth**: Postgres не запущен. Подними инфраструктуру: `docker compose -f docker-compose.dev.yml up -d postgres redis`. Проверь `DATABASE_URL` в `.env` (например `postgresql+asyncpg://postgres:postgres@localhost:5432/aigate`).
 - **401 Unauthorized на `/v1/*`**: не передан `Authorization: Bearer ...` или не создан ключ (запусти `tools/seed_dev_api_key.py`).
 - **502/504 на `/v1/chat/completions`**: проверь `QWEN_API_KEY` и `QWEN_BASE_URL`. `QWEN_BASE_URL` должен соответствовать региону ключа (us/intl/cn). Vision: если `qwen-vl-max` не найден — попробуй `qwen3-vl-plus`.
-- **`GET /v1/models` иногда пустой/падает**: есть fallback allowlist на 502/504 (вернёт qwen-flash/plus/max).  
+- **`GET /v1/models` иногда пустой/падает**: есть fallback allowlist на 502/504 (вернёт qwen-flash/plus/max).
+- **Логи не появляются в Loki**: на Mac Docker Desktop путь `/var/lib/docker/containers` недоступен из контейнера Promtail. Запускай мониторинг на Linux/VPS.  

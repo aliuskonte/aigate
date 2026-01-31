@@ -35,6 +35,6 @@ jobs:
           script: |
             cd /opt/AIGate
             git pull
-            docker compose -f docker-compose.prod.yml down || true
+            docker compose down || true
             docker rm -f aigate-redis aigate-postgres aigate-app 2>/dev/null || true
-            docker compose -f docker-compose.prod.yml up -d --build
+            docker compose up -d --build
