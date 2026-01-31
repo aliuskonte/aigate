@@ -13,7 +13,4 @@ scrape_configs:
     metrics_path: /metrics
     scrape_interval: 10s
 
-# Grafana Cloud: раскомментируй и подставь токен из grafana.com → Stack → Details → Metrics
-# remote_write:
-#   - url: https://prometheus-prod-39-prod-eu-north-0.grafana.net/api/prom/push
-#     bearer_token: "<PROMETHEUS_API_TOKEN>"
+# Grafana Cloud: remote_write добавляется entrypoint-prometheus.sh при наличии PROMETHEUS_API_TOKEN
