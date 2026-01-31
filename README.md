@@ -249,6 +249,8 @@ Endpoint `/metrics` (Prometheus format):
 
 Promtail читает логи контейнеров из `/var/lib/docker/containers` и отправляет в Loki. AIGate пишет JSON в stdout.
 
+**На Mac (Docker Desktop):** `/var/lib/docker/containers` может быть недоступен (логи в VM). Логи в Loki появятся на Linux/VPS.
+
 ## Примечания
 - Код в `src/aigate/` (src-layout).
 
@@ -257,4 +259,5 @@ Promtail читает логи контейнеров из `/var/lib/docker/cont
 - **500 Internal Server Error, ConnectionRefusedError в auth**: Postgres не запущен. Подними инфраструктуру: `docker compose up -d postgres redis`. Проверь `DATABASE_URL` в `.env` (например `postgresql+asyncpg://postgres:postgres@localhost:5432/aigate`).
 - **401 Unauthorized на `/v1/*`**: не передан `Authorization: Bearer ...` или не создан ключ (запусти `tools/seed_dev_api_key.py`).
 - **502/504 на `/v1/chat/completions`**: проверь `QWEN_API_KEY` и `QWEN_BASE_URL`. `QWEN_BASE_URL` должен соответствовать региону ключа (us/intl/cn). Vision: если `qwen-vl-max` не найден — попробуй `qwen3-vl-plus`.
-- **`GET /v1/models` иногда пустой/падает**: есть fallback allowlist на 502/504 (вернёт qwen-flash/plus/max).  
+- **`GET /v1/models` иногда пустой/падает**: есть fallback allowlist на 502/504 (вернёт qwen-flash/plus/max).
+- **Логи не появляются в Loki**: на Mac Docker Desktop путь `/var/lib/docker/containers` недоступен из контейнера Promtail. Запускай мониторинг на Linux/VPS.  
