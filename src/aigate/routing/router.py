@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from aigate.core.errors import bad_request
@@ -35,3 +36,16 @@ async def route_and_call(registry: ProviderRegistry, req: ChatRequest) -> ChatRe
     provider_req = req.model_copy(update={"model": target.provider_model})
     resp = await adapter.chat_completions(provider_req)
     return resp.model_copy(update={"model": f"{target.provider}:{target.provider_model}"})
+
+
+async def route_and_stream(registry: ProviderRegistry, req: ChatRequest) -> AsyncIterator[bytes]:
+    """Stream chat completions from the appropriate provider. Model prefix is applied by adapter."""
+    target = parse_explicit_model(req.model)
+    try:
+        adapter = registry.get(target.provider)
+    except KeyError as e:
+        raise bad_request(f"Unknown provider: {target.provider}") from e
+
+    provider_req = req.model_copy(update={"model": target.provider_model})
+    async for chunk in adapter.stream_chat_completions(provider_req):
+        yield chunk

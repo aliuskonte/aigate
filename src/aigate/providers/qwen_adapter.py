@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from uuid import uuid4
 from typing import Any, Literal
 
 import httpx
 
-from aigate.core.errors import bad_gateway, gateway_timeout, not_implemented
+from aigate.core.errors import bad_gateway, gateway_timeout
 from aigate.domain.chat import ChatRequest, ChatResponse, Choice, Message, Usage
 from aigate.domain.models import Capabilities, ModelInfo
 from aigate.providers.base import ProviderAdapter
@@ -65,14 +66,14 @@ class QwenAdapter(ProviderAdapter):
             out.append(ModelInfo(id=str(model_id), provider=self.name, display_name=str(model_id), capabilities=caps))
         return out
 
-    async def chat_completions(self, req: ChatRequest) -> ChatResponse:
-        if req.stream:
-            raise not_implemented("Streaming is not implemented in MVP yet")
+    def _serialize_content(self, content: str | list) -> str | list[dict[str, Any]]:
+        if isinstance(content, str):
+            return content
+        return [p.model_dump(mode="json") for p in content]
 
+    async def chat_completions(self, req: ChatRequest) -> ChatResponse:
         def _serialize_content(content: str | list) -> str | list[dict[str, Any]]:
-            if isinstance(content, str):
-                return content
-            return [p.model_dump(mode="json") for p in content]
+            return self._serialize_content(content)
 
         payload: dict[str, Any] = {
             "model": req.model,
@@ -128,3 +129,41 @@ class QwenAdapter(ProviderAdapter):
             choices=choices,
             usage=out_usage,
         )
+
+    async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
+        payload: dict[str, Any] = {
+            "model": req.model,
+            "messages": [
+                {"role": m.role, "content": self._serialize_content(m.content)} for m in req.messages
+            ],
+            "stream": True,
+        }
+        if req.temperature is not None:
+            payload["temperature"] = req.temperature
+
+        try:
+            async with self._client.stream("POST", "/chat/completions", json=payload) as resp:
+                if resp.status_code >= 400:
+                    body = await resp.aread()
+                    detail = body.decode("utf-8", errors="replace")[:500]
+                    raise bad_gateway(f"Qwen returned {resp.status_code}: {detail}")
+
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data_part = line[6:]
+                    if data_part.strip() == "[DONE]":
+                        yield b"data: [DONE]\n"
+                        continue
+                    try:
+                        obj = json.loads(data_part)
+                    except json.JSONDecodeError:
+                        yield (line + "\n").encode("utf-8")
+                        continue
+                    if "model" in obj and obj["model"]:
+                        obj["model"] = f"{self.name}:{obj['model']}"
+                    yield ("data: " + json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
+        except httpx.TimeoutException as e:
+            raise gateway_timeout("Qwen streaming timed out") from e
+        except httpx.HTTPError as e:
+            raise bad_gateway("Qwen streaming request failed") from e

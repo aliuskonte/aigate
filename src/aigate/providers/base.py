@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 
 from aigate.domain.chat import ChatRequest, ChatResponse
 from aigate.domain.models import ModelInfo
@@ -15,4 +16,9 @@ class ProviderAdapter(ABC):
 
     @abstractmethod
     async def chat_completions(self, req: ChatRequest) -> ChatResponse:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
+        """Stream chat completions as SSE bytes. Yields complete SSE events (data: ...\\n)."""
         raise NotImplementedError

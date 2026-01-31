@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import json
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -150,6 +152,47 @@ async def test_qwen_adapter_vision_content_base64() -> None:
         )
 
     assert resp.choices[0].message.content == "ok"
+
+
+@pytest.mark.asyncio
+async def test_qwen_adapter_stream_chat_completions() -> None:
+    """Streaming: yields SSE chunks with model prefix applied."""
+    lines = [
+        'data: {"id":"c1","model":"qwen-plus","choices":[{"index":0,"delta":{"role":"assistant","content":""}}]}',
+        'data: {"id":"c1","model":"qwen-plus","choices":[{"index":0,"delta":{"content":"Hi"}}]}',
+        'data: {"id":"c1","model":"qwen-plus","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}',
+        "data: [DONE]",
+    ]
+
+    async def aiter_lines():
+        for line in lines:
+            yield line
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.aiter_lines = aiter_lines
+
+    @contextlib.asynccontextmanager
+    async def fake_stream(*args, **kwargs):
+        yield mock_resp
+
+    transport = httpx.MockTransport(lambda r: httpx.Response(200))
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        headers={"Authorization": "Bearer test-key"},
+    ) as client:
+        adapter = QwenAdapter(client=client)
+        adapter._client.stream = fake_stream
+        chunks = []
+        async for chunk in adapter.stream_chat_completions(
+            ChatRequest(model="qwen-plus", messages=[Message(role="user", content="hi")], stream=True)
+        ):
+            chunks.append(chunk)
+
+    assert len(chunks) == 4
+    assert b"qwen:qwen-plus" in chunks[0]
+    assert chunks[3] == b"data: [DONE]\n"
 
 
 @pytest.mark.asyncio

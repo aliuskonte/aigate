@@ -95,6 +95,16 @@ curl -s \
   -d '{"model":"qwen:qwen-flash","messages":[{"role":"user","content":"Hi"}]}' | jq
 ```
 
+Chat completions (streaming SSE):
+
+```bash
+curl -s -N \
+  -X POST http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer ${AIGATE_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen:qwen-flash","messages":[{"role":"user","content":"Hi"}],"stream":true}'
+```
+
 Idempotency (тот же `Idempotency-Key` + тот же body → один и тот же ответ):
 
 ```bash
