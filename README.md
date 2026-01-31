@@ -214,6 +214,41 @@ Workflow `.github/workflows/deploy.yml`: тесты → SSH на VPS → `cd /op
 
 После этого изменения в `main` возможны только через merge PR, деплой срабатывает при merge.
 
+## Мониторинг (Promtail + Loki + Prometheus + Grafana)
+
+### Запуск
+
+1. Запустить приложение (создаёт сеть `aigate_monitoring`):
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d --build
+   ```
+
+2. Запустить стек мониторинга:
+   ```bash
+   docker compose -f docker-compose.monitoring.yml up -d
+   ```
+
+### Доступ
+
+| Сервис | URL | Описание |
+|--------|-----|----------|
+| Grafana | http://localhost:3000 | Дашборды (admin/admin) |
+| Prometheus | http://localhost:9090 | Метрики |
+| Loki | http://localhost:3100 | Логи |
+
+### Метрики AIGate
+
+Endpoint `/metrics` (Prometheus format):
+
+- `aigate_requests_total` — всего запросов (provider, model, stream, status)
+- `aigate_request_duration_seconds` — длительность запросов
+- `aigate_errors_total` — ошибки по статусу
+- `aigate_billed_cost_total` — суммарный billed_cost (USD)
+
+### Логи
+
+Promtail читает логи контейнеров из `/var/lib/docker/containers` и отправляет в Loki. AIGate пишет JSON в stdout.
+
 ## Примечания
 - Код в `src/aigate/` (src-layout).
 
