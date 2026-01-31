@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -20,6 +22,9 @@ class FailingModelsAdapter(ProviderAdapter):
         raise HTTPException(status_code=502, detail="Bad gateway")
 
     async def chat_completions(self, req: ChatRequest) -> ChatResponse:
+        raise NotImplementedError
+
+    async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
         raise NotImplementedError
 
 
@@ -54,6 +59,9 @@ def test_models_fallback_on_504() -> None:
             raise HTTPException(status_code=504, detail="Gateway timeout")
 
         async def chat_completions(self, req: ChatRequest) -> ChatResponse:
+            raise NotImplementedError
+
+        async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
             raise NotImplementedError
 
     app = create_app()

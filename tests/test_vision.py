@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
@@ -17,6 +18,9 @@ class DummyVisionAdapter(ProviderAdapter):
 
     async def list_models(self):
         return []
+
+    async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
+        yield b"data: [DONE]\n"
 
     async def chat_completions(self, req: ChatRequest) -> ChatResponse:
         # Echo back that we received vision content

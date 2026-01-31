@@ -6,18 +6,19 @@ import logging
 import time
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aigate.core.auth import AuthContext, get_auth_context
 from aigate.core.config import get_settings
 from aigate.core.deps import get_db_session, get_provider_registry
-from aigate.core.errors import conflict, not_implemented
+from aigate.core.errors import bad_request, conflict, not_implemented
 from aigate.limits.rate_limit import check_rate_limit
 from aigate.core.logging import LogContext, with_context
 from aigate.domain.chat import ChatRequest, ChatResponse, Choice, Message, TextPart
 from aigate.limits.idempotency import get_cached_response, set_cached_response
 from aigate.providers.registry import ProviderRegistry
-from aigate.routing.router import parse_explicit_model, route_and_call
+from aigate.routing.router import parse_explicit_model, route_and_call, route_and_stream
 from aigate.storage.repos import compute_billed_cost, create_request_log, create_usage_event
 
 router = APIRouter()
@@ -30,7 +31,7 @@ def _hash_request(body: ChatRequest) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-@router.post("/chat/completions", response_model=ChatResponse)
+@router.post("/chat/completions")
 async def chat_completions(
     request: Request,
     body: ChatRequest,
@@ -52,6 +53,91 @@ async def chat_completions(
     request_hash = _hash_request(body)
     settings = get_settings()
     redis = getattr(request.app.state, "redis", None)
+
+    # Streaming path: Idempotency not supported
+    if body.stream:
+        if idem_key:
+            raise bad_request("Idempotency is not supported with streaming")
+        if redis:
+            await check_rate_limit(redis, auth.org_id, settings.rate_limit_rpm_default)
+
+        async def stream_gen():
+            started = time.perf_counter()
+            status_code = 200
+            usage_data: dict | None = None
+            try:
+                async for chunk in route_and_stream(registry, body):
+                    if chunk.startswith(b"data: ") and chunk != b"data: [DONE]\n":
+                        try:
+                            raw = chunk[6:].decode("utf-8").strip()
+                            if raw and raw != "[DONE]":
+                                obj = json.loads(raw)
+                                if isinstance(obj, dict) and "usage" in obj:
+                                    usage_data = obj["usage"]
+                        except (json.JSONDecodeError, UnicodeDecodeError):
+                            pass
+                    yield chunk
+            except Exception as e:
+                status_code = getattr(e, "status_code", 500)
+                raise
+            finally:
+                latency_ms = int((time.perf_counter() - started) * 1000)
+                logger.info(
+                    "chat.completions.stream.done",
+                    extra={
+                        "provider": target.provider,
+                        "model": target.provider_model,
+                        "status": status_code,
+                        "latency_ms": latency_ms,
+                    },
+                )
+                if session is not None and request_id:
+                    try:
+                        req_row = await create_request_log(
+                            session,
+                            request_id=str(request_id),
+                            org_id=auth.org_id,
+                            provider=target.provider,
+                            model=target.provider_model,
+                            status_code=int(status_code),
+                            latency_ms=latency_ms,
+                            request_hash=request_hash,
+                            idempotency_key=None,
+                        )
+                        if usage_data:
+                            prompt_tokens = usage_data.get("prompt_tokens") or usage_data.get("input_tokens")
+                            completion_tokens = usage_data.get("completion_tokens") or usage_data.get("output_tokens")
+                            billed_raw, billed_cost = await compute_billed_cost(
+                                session,
+                                org_id=auth.org_id,
+                                provider=target.provider,
+                                model=target.provider_model,
+                                prompt_tokens=prompt_tokens,
+                                completion_tokens=completion_tokens,
+                                raw_cost_from_provider=None,
+                            )
+                            await create_usage_event(
+                                session,
+                                org_id=auth.org_id,
+                                request_db_id=req_row.id,
+                                provider=target.provider,
+                                model=target.provider_model,
+                                prompt_tokens=prompt_tokens,
+                                completion_tokens=completion_tokens,
+                                total_tokens=(prompt_tokens or 0) + (completion_tokens or 0),
+                                raw_cost=billed_raw,
+                                billed_cost=billed_cost,
+                                currency="USD",
+                            )
+                        await session.commit()
+                    except Exception:
+                        await session.rollback()
+
+        return StreamingResponse(
+            stream_gen(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     # Idempotency: return cached response if same key + same body
     if idem_key and redis:
