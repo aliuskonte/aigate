@@ -251,6 +251,16 @@ Promtail читает логи контейнеров из `/var/lib/docker/cont
 
 **На Mac (Docker Desktop):** `/var/lib/docker/containers` может быть недоступен (логи в VM). Логи в Loki появятся на Linux/VPS.
 
+### Grafana Cloud
+
+Для визуализации в Grafana Cloud задай в `.env`:
+
+- `LOKI_URL` — полный URL push (например `https://logs-prod-XXX.grafana.net/loki/api/v1/push`)
+- `PROMETHEUS_REMOTE_WRITE_URL` — URL remote_write (например `https://prometheus-prod-XX-prod-REGION.grafana.net/api/prom/push`)
+- `LOKI_API_TOKEN`, `PROMETHEUS_API_TOKEN` — токены из grafana.com → Stack → Details
+
+Логи и метрики будут отправляться в Grafana Cloud в дополнение к локальному Loki/Prometheus.
+
 ## Примечания
 - Код в `src/aigate/` (src-layout).
 
