@@ -12,3 +12,5 @@ scrape_configs:
       - targets: ["aigate:8000"]
     metrics_path: /metrics
     scrape_interval: 10s
+
+# Grafana Cloud: remote_write добавляется entrypoint-prometheus.sh при наличии PROMETHEUS_API_TOKEN

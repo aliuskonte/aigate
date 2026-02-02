@@ -1,7 +1,8 @@
 # Monitoring stack: Loki, Promtail, Prometheus, Grafana
-# Requires network aigate_monitoring (created by docker-compose.prod.yml)
-# Run: docker compose -f docker-compose.prod.yml up -d  (creates network)
+# Requires network aigate_monitoring (created by docker-compose.yml)
+# Run: docker compose up -d  (creates network)
 #      docker compose -f docker-compose.monitoring.yml up -d
+# Grafana Cloud: задай LOKI_URL, LOKI_API_TOKEN, PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_API_TOKEN в .env
 
 services:
   loki:
@@ -23,11 +24,13 @@ services:
     restart: unless-stopped
     ports:
       - "9080:9080"
+    env_file:
+      - .env
     volumes:
-      - ./monitoring/promtail/promtail-config.yaml:/etc/promtail/config.yaml
+      - ./monitoring/scripts:/scripts:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
-    command: -config.file=/etc/promtail/config.yaml
+    command: ["/bin/sh", "/scripts/entrypoint-promtail.sh"]
     privileged: true
     depends_on:
       - loki
@@ -40,13 +43,13 @@ services:
     restart: unless-stopped
     ports:
       - "9090:9090"
+    env_file:
+      - .env
     volumes:
-      - ./monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/scripts:/scripts:ro
       - prometheus_data:/prometheus
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.path=/prometheus
-      - --web.enable-lifecycle
+    command: ["/bin/sh", "/scripts/entrypoint-prometheus.sh"]
     networks:
       - monitoring
 

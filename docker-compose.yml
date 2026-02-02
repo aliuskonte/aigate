@@ -2,12 +2,12 @@ services:
   postgres:
     image: postgres:16
     container_name: aigate-postgres
+    env_file:
+      - .env
     environment:
-      POSTGRES_DB: aigate
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-aigate}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,13 +19,41 @@ services:
   redis:
     image: redis:7
     container_name: aigate-redis
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 20
+
+  aigate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aigate-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      AIGATE_ENV: prod
+      AIGATE_LOG_LEVEL: WARNING
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aigate}
+      REDIS_URL: redis://redis:6379/0
+      QWEN_API_KEY: ${QWEN_API_KEY}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-https://dashscope-us.aliyuncs.com/compatible-mode/v1}
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - default
+      - monitoring
+
+networks:
+  monitoring:
+    name: aigate_monitoring
 
 volumes:
   postgres_data:
