@@ -28,7 +28,8 @@ cp .env.example .env
 ```
 
 Минимально для E2E:
-- `DATABASE_URL` (Postgres)
+- `POSTGRES_PASSWORD` (обязательно — пароль Postgres, задаётся при первой инициализации тома)
+- `DATABASE_URL` (тот же пароль: `postgresql+asyncpg://postgres:<PASSWORD>@localhost:5432/aigate`)
 - `REDIS_URL` (Redis)
 - `QWEN_API_KEY` (DashScope)
 
@@ -156,7 +157,7 @@ PYTHONPATH=src pipenv run python tools/test_vision_local.py tests/img/*.jpeg -p 
 sudo mkdir -p /opt && sudo chown $USER:$USER /opt
 git clone <repo-url> /opt/AIGate && cd /opt/AIGate
 cp .env.example .env
-# Отредактируй .env: QWEN_API_KEY (обязательно), QWEN_BASE_URL при необходимости
+# Отредактируй .env: POSTGRES_PASSWORD (обязательно), QWEN_API_KEY (обязательно), QWEN_BASE_URL при необходимости
 ```
 
 ### 2) Запуск
@@ -266,7 +267,8 @@ Promtail читает логи контейнеров из `/var/lib/docker/cont
 
 ## Troubleshooting
 
-- **500 Internal Server Error, ConnectionRefusedError в auth**: Postgres не запущен. Подними инфраструктуру: `docker compose -f docker-compose.dev.yml up -d postgres redis`. Проверь `DATABASE_URL` в `.env` (например `postgresql+asyncpg://postgres:postgres@localhost:5432/aigate`).
+- **500 Internal Server Error, ConnectionRefusedError в auth**: Postgres не запущен. Подними инфраструктуру: `docker compose -f docker-compose.dev.yml up -d postgres redis`. Проверь `DATABASE_URL` в `.env` (например `postgresql+asyncpg://postgres:<PASSWORD>@localhost:5432/aigate`).
+- **password authentication failed for user "postgres"**: пароль в БД не совпадает с `POSTGRES_PASSWORD` в `.env`. PostgreSQL задаёт пароль только при первой инициализации тома. **Решение A (данные не нужны):** `docker compose down && docker volume rm aigate_postgres_data && docker compose up -d`, затем сиды. **Решение B (данные нужны):** сменить пароль в контейнере: `docker exec -it aigate-postgres psql -U postgres -d aigate -c "ALTER USER postgres PASSWORD 'postgres';"` (подставь пароль из `.env`).
 - **401 Unauthorized на `/v1/*`**: не передан `Authorization: Bearer ...` или не создан ключ (запусти `tools/seed_dev_api_key.py`).
 - **502/504 на `/v1/chat/completions`**: проверь `QWEN_API_KEY` и `QWEN_BASE_URL`. `QWEN_BASE_URL` должен соответствовать региону ключа (us/intl/cn). Vision: если `qwen-vl-max` не найден — попробуй `qwen3-vl-plus`.
 - **`GET /v1/models` иногда пустой/падает**: есть fallback allowlist на 502/504 (вернёт qwen-flash/plus/max).
