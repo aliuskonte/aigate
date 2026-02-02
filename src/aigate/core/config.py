@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     qwen_default_output_price_per_1k: Decimal = Decimal("0.001")
 
     # Storage/Redis
+    postgres_user: str = "postgres"
+    postgres_password: str | None = None
+    postgres_db: str = "aigate"
     database_url: str | None = None
     redis_url: str | None = None
     idempotency_ttl_seconds: int = 86400  # 24h

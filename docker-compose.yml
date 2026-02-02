@@ -2,10 +2,12 @@ services:
   postgres:
     image: postgres:16
     container_name: aigate-postgres
+    env_file:
+      - .env
     environment:
-      POSTGRES_DB: aigate
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-aigate}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -38,7 +40,7 @@ services:
     environment:
       AIGATE_ENV: prod
       AIGATE_LOG_LEVEL: WARNING
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/aigate
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aigate}
       REDIS_URL: redis://redis:6379/0
       QWEN_API_KEY: ${QWEN_API_KEY}
       QWEN_BASE_URL: ${QWEN_BASE_URL:-https://dashscope-us.aliyuncs.com/compatible-mode/v1}
