@@ -2,6 +2,8 @@
 
 AI gateway/broker: единый API для клиентов, внутри — канонический формат, роутинг на провайдеров, лимиты, идемпотентность, metering/billing.
 
+**Инструкция для клиентов:** [docs/CLIENT_GUIDE.md](docs/CLIENT_GUIDE.md)
+
 ## Быстрый старт (локально)
 
 ### 1) Зависимости (pipenv)
@@ -136,6 +138,24 @@ curl -s \
 ```
 
 Поддерживаются URL (`https://...`) и base64 (`data:image/jpeg;base64,...`).
+
+Два изображения (base64, без внешних ссылок):
+
+```json
+{
+  "model": "qwen:qwen3-vl-plus",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {"type": "text", "text": "Сравни эти два изображения"},
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,/9j/4AAQ..."}},
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,/9j/4AAQ..."}}
+      ]
+    }
+  ]
+}
+```
 
 Локальные файлы (base64):
 
