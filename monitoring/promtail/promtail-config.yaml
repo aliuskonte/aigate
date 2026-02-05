@@ -27,3 +27,4 @@ scrape_configs:
         target_label: "container"
     pipeline_stages:
       - docker: {}  # парсит JSON-формат Docker (log, stream, attrs)
+      
