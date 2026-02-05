@@ -641,7 +641,7 @@
       "pluginVersion": "12.3.2",
       "targets": [
         {
-          "expr": "count_over_time({container=\"aigate-app\"} | regexp \"HTTP/1\\\\.1\\\\\\\" 404 \" [5m])",
+          "expr": "count_over_time({container=\"aigate-app\"} |~ \"HTTP/1\\\\.1\\\\\\\" 404 \" [5m])",
           "refId": "A"
         }
       ],
@@ -668,7 +668,7 @@
       "pluginVersion": "12.3.2",
       "targets": [
         {
-          "expr": "{container=\"aigate-app\"} | regexp \"HTTP/1\\\\.1\\\\\\\" (4\\\\d\\\\d|5\\\\d\\\\d) \"",
+          "expr": "{container=\"aigate-app\"} |~ \"HTTP/1\\\\.1\\\\\\\" (4\\\\d\\\\d|5\\\\d\\\\d) \"",
           "refId": "A"
         }
       ],
