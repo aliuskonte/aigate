@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -12,6 +13,8 @@ from aigate.core.errors import bad_gateway, gateway_timeout
 from aigate.domain.chat import ChatRequest, ChatResponse, Choice, Message, Usage
 from aigate.domain.models import Capabilities, ModelInfo
 from aigate.providers.base import ProviderAdapter
+
+log = logging.getLogger(__name__)
 
 
 def _safe_text(value: Any) -> str:
@@ -38,8 +41,10 @@ class QwenAdapter(ProviderAdapter):
         try:
             resp = await self._client.get("/models")
         except httpx.TimeoutException as e:
+            log.exception("Qwen models request timed out: %s", e)
             raise gateway_timeout("Qwen models request timed out") from e
         except httpx.HTTPError as e:
+            log.exception("Qwen models request failed: %s", e)
             raise bad_gateway("Qwen models request failed") from e
 
         if resp.status_code == 404:
@@ -87,8 +92,10 @@ class QwenAdapter(ProviderAdapter):
         try:
             resp = await self._client.post("/chat/completions", json=payload)
         except httpx.TimeoutException as e:
+            log.exception("Qwen chat completion timed out: %s", e)
             raise gateway_timeout("Qwen chat completion timed out") from e
         except httpx.HTTPError as e:
+            log.exception("Qwen chat completion failed: %s", e)
             raise bad_gateway("Qwen chat completion request failed") from e
 
         if resp.status_code >= 400:
@@ -164,6 +171,8 @@ class QwenAdapter(ProviderAdapter):
                         obj["model"] = f"{self.name}:{obj['model']}"
                     yield ("data: " + json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
         except httpx.TimeoutException as e:
+            log.exception("Qwen streaming timed out: %s", e)
             raise gateway_timeout("Qwen streaming timed out") from e
         except httpx.HTTPError as e:
+            log.exception("Qwen streaming failed: %s", e)
             raise bad_gateway("Qwen streaming request failed") from e
