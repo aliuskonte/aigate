@@ -18,13 +18,17 @@ class StreamingDummyAdapter(ProviderAdapter):
     async def list_models(self):
         return []
 
-    async def chat_completions(self, req: ChatRequest) -> ChatResponse:
+    async def chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> ChatResponse:
         return ChatResponse(
             model=req.model,
             choices=[Choice(index=0, message=Message(role="assistant", content="ok"), finish_reason="stop")],
         )
 
-    async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
+    async def stream_chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> AsyncIterator[bytes]:
         # Adapter adds provider prefix to model (like QwenAdapter)
         model = f"{self.name}:{req.model}"
         yield (f'data: {{"id":"c1","model":"{model}","choices":[{{"index":0,"delta":{{"role":"assistant","content":""}}}}]}}\n').encode()

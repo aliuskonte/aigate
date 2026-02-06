@@ -29,7 +29,9 @@ def parse_explicit_model(model: str) -> RoutedTarget:
     return RoutedTarget(provider=provider, provider_model=provider_model)
 
 
-async def route_and_call(registry: ProviderRegistry, req: ChatRequest) -> ChatResponse:
+async def route_and_call(
+    registry: ProviderRegistry, req: ChatRequest, timeout_seconds: float | None = None
+) -> ChatResponse:
     target = parse_explicit_model(req.model)
     try:
         adapter = registry.get(target.provider)
@@ -38,11 +40,13 @@ async def route_and_call(registry: ProviderRegistry, req: ChatRequest) -> ChatRe
         raise bad_request(f"Unknown provider: {target.provider}") from e
 
     provider_req = req.model_copy(update={"model": target.provider_model})
-    resp = await adapter.chat_completions(provider_req)
+    resp = await adapter.chat_completions(provider_req, timeout_seconds=timeout_seconds)
     return resp.model_copy(update={"model": f"{target.provider}:{target.provider_model}"})
 
 
-async def route_and_stream(registry: ProviderRegistry, req: ChatRequest) -> AsyncIterator[bytes]:
+async def route_and_stream(
+    registry: ProviderRegistry, req: ChatRequest, timeout_seconds: float | None = None
+) -> AsyncIterator[bytes]:
     """Stream chat completions from the appropriate provider. Model prefix is applied by adapter."""
     target = parse_explicit_model(req.model)
     try:
@@ -52,5 +56,7 @@ async def route_and_stream(registry: ProviderRegistry, req: ChatRequest) -> Asyn
         raise bad_request(f"Unknown provider: {target.provider}") from e
 
     provider_req = req.model_copy(update={"model": target.provider_model})
-    async for chunk in adapter.stream_chat_completions(provider_req):
+    async for chunk in adapter.stream_chat_completions(
+        provider_req, timeout_seconds=timeout_seconds
+    ):
         yield chunk

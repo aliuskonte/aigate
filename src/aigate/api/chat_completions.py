@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aigate.core.auth import AuthContext, get_auth_context
-from aigate.core.config import get_settings
+from aigate.core.config import Settings, get_settings
 from aigate.core.deps import get_db_session, get_provider_registry
 from aigate.core.metrics import (
     aigate_billed_cost_total,
@@ -46,6 +46,20 @@ def _hash_request(body: ChatRequest) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _effective_timeout(request: Request, settings: Settings) -> float:
+    """Parse X-Timeout header (seconds), clamp to server max; return default if missing/invalid."""
+    raw = request.headers.get("X-Timeout")
+    if raw is None or raw.strip() == "":
+        return settings.qwen_timeout_default_seconds
+    try:
+        value = float(raw.strip())
+    except ValueError:
+        return settings.qwen_timeout_default_seconds
+    if value <= 0:
+        return settings.qwen_timeout_default_seconds
+    return min(value, settings.qwen_timeout_max_seconds)
+
+
 @router.post("/chat/completions")
 async def chat_completions(
     request: Request,
@@ -68,6 +82,7 @@ async def chat_completions(
     request_hash = _hash_request(body)
     settings = get_settings()
     redis = getattr(request.app.state, "redis", None)
+    effective_timeout = _effective_timeout(request, settings)
 
     # Streaming path: Idempotency not supported
     if body.stream:
@@ -81,7 +96,7 @@ async def chat_completions(
             status_code = 200
             usage_data: dict | None = None
             try:
-                async for chunk in route_and_stream(registry, body):
+                async for chunk in route_and_stream(registry, body, timeout_seconds=effective_timeout):
                     if chunk.startswith(b"data: ") and chunk != b"data: [DONE]\n":
                         try:
                             raw = chunk[6:].decode("utf-8").strip()
@@ -199,7 +214,7 @@ async def chat_completions(
 
     logger.info("chat.completions.request", extra={"provider": target.provider, "model": target.provider_model})
     try:
-        resp = await route_and_call(registry, body)
+        resp = await route_and_call(registry, body, timeout_seconds=effective_timeout)
         if session is not None and resp is not None and resp.usage is not None:
             billed_raw_cost, billed_cost = await compute_billed_cost(
                 session,

@@ -15,14 +15,18 @@ class DummyAdapter(ProviderAdapter):
     async def list_models(self):
         return []
 
-    async def chat_completions(self, req: ChatRequest) -> ChatResponse:
+    async def chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> ChatResponse:
         # returns provider model (no "qwen:" prefix)
         return ChatResponse(
             model=req.model,
             choices=[Choice(index=0, message=Message(role="assistant", content="ok"), finish_reason="stop")],
         )
 
-    async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
+    async def stream_chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> AsyncIterator[bytes]:
         yield b"data: [DONE]\n"
 
 

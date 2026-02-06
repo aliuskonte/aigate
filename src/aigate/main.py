@@ -34,7 +34,9 @@ async def lifespan(app: FastAPI):
         qwen_client = httpx.AsyncClient(
             base_url=settings.qwen_base_url,
             headers={"Authorization": f"Bearer {settings.qwen_api_key}"},
-            timeout=httpx.Timeout(120.0, connect=10.0),
+            timeout=httpx.Timeout(
+                settings.qwen_timeout_default_seconds, connect=10.0
+            ),
         )
         app.state.qwen_http_client = qwen_client
 
