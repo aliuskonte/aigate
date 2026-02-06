@@ -257,6 +257,16 @@ Workflow `.github/workflows/deploy.yml`: тесты → SSH на VPS → `cd /op
 | Prometheus | http://localhost:9090 | Метрики |
 | Loki | http://localhost:3100 | Логи |
 
+### Доступ к Grafana на VPS (SSH-туннель)
+
+Если мониторинг запущен на VPS, Grafana доступна через SSH-туннель:
+
+```bash
+ssh -L 3000:localhost:3000 user@VPS_IP
+```
+
+Затем открой в браузере http://localhost:3000
+
 ### Метрики AIGate
 
 Endpoint `/metrics` (Prometheus format):
