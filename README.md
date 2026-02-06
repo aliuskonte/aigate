@@ -301,6 +301,17 @@ Promtail читает логи контейнеров из `/var/lib/docker/cont
 - **password authentication failed for user "postgres"**: пароль в БД не совпадает с `POSTGRES_PASSWORD` в `.env`. PostgreSQL задаёт пароль только при первой инициализации тома. **Решение A (данные не нужны):** `docker compose down && docker volume rm aigate_postgres_data && docker compose up -d`, затем сиды. **Решение B (данные нужны):** сменить пароль в контейнере: `docker exec -it aigate-postgres psql -U postgres -d aigate -c "ALTER USER postgres PASSWORD 'postgres';"` (подставь пароль из `.env`).
 - **401 Unauthorized на `/v1/*`**: не передан `Authorization: Bearer ...` или не создан ключ (запусти `tools/seed_dev_api_key.py`).
 - **502/504 на `/v1/chat/completions`**: проверь `QWEN_API_KEY` и `QWEN_BASE_URL`. `QWEN_BASE_URL` должен соответствовать региону ключа (us/intl/cn). Vision: если `qwen-vl-max` не найден — попробуй `qwen3-vl-plus`.
-- **504 через ~60 с на тяжёлых запросах**: таймаут приложения задаётся `QWEN_TIMEOUT_DEFAULT_SECONDS` / `QWEN_TIMEOUT_MAX_SECONDS` и заголовком `X-Timeout`. Если 504 всё равно приходит через ~60 с — ограничение снаружи (прокси/балансировщик). Для nginx: `proxy_read_timeout 300s;` (и при необходимости `send_timeout` / `client_body_timeout`).
+- **504 через ~60 с на тяжёлых запросах**: таймаут приложения задаётся `QWEN_TIMEOUT_DEFAULT_SECONDS` / `QWEN_TIMEOUT_MAX_SECONDS` и **HTTP-заголовком** `X-Timeout` (секунды) для `POST /v1/chat/completions`.
+  - Effective timeout считается так: если `X-Timeout` не задан/невалиден → `QWEN_TIMEOUT_DEFAULT_SECONDS`, иначе \( \min(X\text{-}Timeout,\ QWEN\_TIMEOUT\_MAX\_SECONDS) \).
+  - Пример:
+
+```bash
+curl -s -X POST http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer <API_KEY>" \
+  -H "Content-Type: application/json" \
+  -H "X-Timeout: 300" \
+  -d '{"model":"qwen:qwen-flash","messages":[{"role":"user","content":"hi"}]}'
+```
+  - Если 504 всё равно приходит через ~60 с — ограничение снаружи (прокси/балансировщик/сеть). Для nginx: `proxy_read_timeout 300s;` (и при необходимости `proxy_send_timeout` / `send_timeout` / `client_body_timeout`).
 - **`GET /v1/models` иногда пустой/падает**: есть fallback allowlist на 502/504 (вернёт qwen-flash/plus/max).
 - **Логи не появляются в Loki**: на Mac Docker Desktop путь `/var/lib/docker/containers` недоступен из контейнера Promtail. Запускай мониторинг на Linux/VPS.  
