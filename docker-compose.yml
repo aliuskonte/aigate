@@ -44,6 +44,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       QWEN_API_KEY: ${QWEN_API_KEY}
       QWEN_BASE_URL: ${QWEN_BASE_URL:-https://dashscope-us.aliyuncs.com/compatible-mode/v1}
+      QWEN_TIMEOUT_DEFAULT_SECONDS: ${QWEN_TIMEOUT_DEFAULT_SECONDS:-300}
+      QWEN_TIMEOUT_MAX_SECONDS: ${QWEN_TIMEOUT_MAX_SECONDS:-600}
     ports:
       - "8000:8000"
     restart: unless-stopped
