@@ -19,11 +19,16 @@ def utcnow() -> datetime:
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Create org + API key (dev)")
     parser.add_argument("--org-name", default="dev-org", help="Organization name")
+    parser.add_argument(
+        "--database-url",
+        default=os.getenv("DATABASE_URL"),
+        help="PostgreSQL URL (default: DATABASE_URL env)",
+    )
     args = parser.parse_args()
 
-    database_url = os.getenv("DATABASE_URL")
+    database_url = args.database_url
     if not database_url:
-        raise SystemExit("DATABASE_URL is not set")
+        raise SystemExit("DATABASE_URL is not set or pass --database-url")
 
     engine = create_engine(database_url=database_url)
     sessionmaker = create_sessionmaker(engine)
