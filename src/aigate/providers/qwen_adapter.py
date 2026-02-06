@@ -31,6 +31,16 @@ def _as_role(value: Any) -> Literal["system", "user", "assistant"]:
     return "assistant"
 
 
+def _format_http_error(e: Exception) -> str:
+    """Format exception for logging; include type and cause so empty str(e) still gives a clue."""
+    msg = str(e).strip() or repr(e)
+    out = f"{type(e).__name__}: {msg}"
+    cause = getattr(e, "__cause__", None)
+    if cause is not None:
+        out += f" (cause: {cause})"
+    return out
+
+
 class QwenAdapter(ProviderAdapter):
     name = "qwen"
 
@@ -41,10 +51,10 @@ class QwenAdapter(ProviderAdapter):
         try:
             resp = await self._client.get("/models")
         except httpx.TimeoutException as e:
-            log.exception("Qwen models request timed out: %s", e)
+            log.exception("Qwen models request timed out: %s", _format_http_error(e))
             raise gateway_timeout("Qwen models request timed out") from e
         except httpx.HTTPError as e:
-            log.exception("Qwen models request failed: %s", e)
+            log.exception("Qwen models request failed: %s", _format_http_error(e))
             raise bad_gateway("Qwen models request failed") from e
 
         if resp.status_code == 404:
@@ -76,7 +86,9 @@ class QwenAdapter(ProviderAdapter):
             return content
         return [p.model_dump(mode="json") for p in content]
 
-    async def chat_completions(self, req: ChatRequest) -> ChatResponse:
+    async def chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> ChatResponse:
         def _serialize_content(content: str | list) -> str | list[dict[str, Any]]:
             return self._serialize_content(content)
 
@@ -89,13 +101,18 @@ class QwenAdapter(ProviderAdapter):
         if req.temperature is not None:
             payload["temperature"] = req.temperature
 
+        timeout = (
+            httpx.Timeout(timeout_seconds, connect=10.0) if timeout_seconds is not None else None
+        )
         try:
-            resp = await self._client.post("/chat/completions", json=payload)
+            resp = await self._client.post(
+                "/chat/completions", json=payload, timeout=timeout
+            )
         except httpx.TimeoutException as e:
-            log.exception("Qwen chat completion timed out: %s", e)
+            log.exception("Qwen chat completion timed out: %s", _format_http_error(e))
             raise gateway_timeout("Qwen chat completion timed out") from e
         except httpx.HTTPError as e:
-            log.exception("Qwen chat completion failed: %s", e)
+            log.exception("Qwen chat completion failed: %s", _format_http_error(e))
             raise bad_gateway("Qwen chat completion request failed") from e
 
         if resp.status_code >= 400:
@@ -137,7 +154,9 @@ class QwenAdapter(ProviderAdapter):
             usage=out_usage,
         )
 
-    async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
+    async def stream_chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> AsyncIterator[bytes]:
         payload: dict[str, Any] = {
             "model": req.model,
             "messages": [
@@ -148,8 +167,13 @@ class QwenAdapter(ProviderAdapter):
         if req.temperature is not None:
             payload["temperature"] = req.temperature
 
+        timeout = (
+            httpx.Timeout(timeout_seconds, connect=10.0) if timeout_seconds is not None else None
+        )
         try:
-            async with self._client.stream("POST", "/chat/completions", json=payload) as resp:
+            async with self._client.stream(
+                "POST", "/chat/completions", json=payload, timeout=timeout
+            ) as resp:
                 if resp.status_code >= 400:
                     body = await resp.aread()
                     detail = body.decode("utf-8", errors="replace")[:500]
@@ -171,8 +195,8 @@ class QwenAdapter(ProviderAdapter):
                         obj["model"] = f"{self.name}:{obj['model']}"
                     yield ("data: " + json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
         except httpx.TimeoutException as e:
-            log.exception("Qwen streaming timed out: %s", e)
+            log.exception("Qwen streaming timed out: %s", _format_http_error(e))
             raise gateway_timeout("Qwen streaming timed out") from e
         except httpx.HTTPError as e:
-            log.exception("Qwen streaming failed: %s", e)
+            log.exception("Qwen streaming failed: %s", _format_http_error(e))
             raise bad_gateway("Qwen streaming request failed") from e

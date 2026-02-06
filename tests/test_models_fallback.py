@@ -21,10 +21,14 @@ class FailingModelsAdapter(ProviderAdapter):
     async def list_models(self) -> list[ModelInfo]:
         raise HTTPException(status_code=502, detail="Bad gateway")
 
-    async def chat_completions(self, req: ChatRequest) -> ChatResponse:
+    async def chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> ChatResponse:
         raise NotImplementedError
 
-    async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
+    async def stream_chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> AsyncIterator[bytes]:
         raise NotImplementedError
 
 
@@ -58,10 +62,14 @@ def test_models_fallback_on_504() -> None:
         async def list_models(self) -> list[ModelInfo]:
             raise HTTPException(status_code=504, detail="Gateway timeout")
 
-        async def chat_completions(self, req: ChatRequest) -> ChatResponse:
+        async def chat_completions(
+            self, req: ChatRequest, timeout_seconds: float | None = None
+        ) -> ChatResponse:
             raise NotImplementedError
 
-        async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
+        async def stream_chat_completions(
+            self, req: ChatRequest, timeout_seconds: float | None = None
+        ) -> AsyncIterator[bytes]:
             raise NotImplementedError
 
     app = create_app()

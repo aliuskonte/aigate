@@ -15,10 +15,14 @@ class ProviderAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def chat_completions(self, req: ChatRequest) -> ChatResponse:
+    async def chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> ChatResponse:
         raise NotImplementedError
 
     @abstractmethod
-    async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
+    async def stream_chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> AsyncIterator[bytes]:
         """Stream chat completions as SSE bytes. Yields complete SSE events (data: ...\\n)."""
         raise NotImplementedError

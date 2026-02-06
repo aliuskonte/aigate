@@ -19,10 +19,14 @@ class DummyVisionAdapter(ProviderAdapter):
     async def list_models(self):
         return []
 
-    async def stream_chat_completions(self, req: ChatRequest) -> AsyncIterator[bytes]:
+    async def stream_chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> AsyncIterator[bytes]:
         yield b"data: [DONE]\n"
 
-    async def chat_completions(self, req: ChatRequest) -> ChatResponse:
+    async def chat_completions(
+        self, req: ChatRequest, timeout_seconds: float | None = None
+    ) -> ChatResponse:
         # Echo back that we received vision content
         content = req.messages[-1].content if req.messages else ""
         if isinstance(content, list):
