@@ -94,6 +94,7 @@ async def chat_completions(
                     yield chunk
             except Exception as e:
                 status_code = getattr(e, "status_code", 500)
+                log.exception("chat.completions stream failed: %s", e)
                 raise
             finally:
                 latency_ms = int((time.perf_counter() - started) * 1000)
@@ -225,6 +226,7 @@ async def chat_completions(
     except Exception as e:
         # Best-effort capture of status code for ledger (FastAPI HTTPException has .status_code).
         status_code = getattr(e, "status_code", 500)
+        log.exception("chat.completions request failed: %s", e)
         raise
     finally:
         latency_ms = int((time.perf_counter() - started) * 1000)

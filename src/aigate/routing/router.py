@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from aigate.core.errors import bad_request
 from aigate.domain.chat import ChatRequest, ChatResponse
 from aigate.providers.registry import ProviderRegistry
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,7 @@ async def route_and_call(registry: ProviderRegistry, req: ChatRequest) -> ChatRe
     try:
         adapter = registry.get(target.provider)
     except KeyError as e:
+        log.warning("Unknown provider: %s", target.provider)
         raise bad_request(f"Unknown provider: {target.provider}") from e
 
     provider_req = req.model_copy(update={"model": target.provider_model})
@@ -44,6 +48,7 @@ async def route_and_stream(registry: ProviderRegistry, req: ChatRequest) -> Asyn
     try:
         adapter = registry.get(target.provider)
     except KeyError as e:
+        log.warning("Unknown provider: %s", target.provider)
         raise bad_request(f"Unknown provider: {target.provider}") from e
 
     provider_req = req.model_copy(update={"model": target.provider_model})
