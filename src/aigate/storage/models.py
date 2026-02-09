@@ -4,8 +4,9 @@ from decimal import Decimal
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -109,3 +110,40 @@ class UsageEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     request: Mapped[RequestLog] = relationship(back_populates="usage_events")
+
+
+class AssistantKnowledgeBase(Base):
+    __tablename__ = "assistant_kbs"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class AssistantDocument(Base):
+    __tablename__ = "assistant_documents"
+    __table_args__ = (UniqueConstraint("kb_id", "source_uri", name="uq_assistant_documents_source"),)
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    kb_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("assistant_kbs.id"), nullable=False, index=True)
+
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="directory")
+    source_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # sha256 hex
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class AssistantIngestJob(Base):
+    __tablename__ = "assistant_ingest_jobs"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    kb_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("assistant_kbs.id"), nullable=False, index=True)
+
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)  # 0..1
+    error: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    stats: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
