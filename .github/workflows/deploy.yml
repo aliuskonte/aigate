@@ -34,7 +34,10 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /opt/AIGate
-            git pull
+            # Ensure the server is exactly on origin/main (avoid "main behind origin/main")
+            git fetch origin
+            git checkout main
+            git reset --hard origin/main
             docker compose down || true
             docker rm -f aigate-redis aigate-postgres aigate-app 2>/dev/null || true
             docker compose up -d --build
