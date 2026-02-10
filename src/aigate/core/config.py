@@ -10,9 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 
-    # `local` is the preferred name for development environment.
-    # Backward-compatibility: `dev` is accepted as an alias of `local`.
-    aigate_env: Literal["local", "dev", "test", "prod"] = "local"
+    aigate_env: Literal["local", "test", "prod"] = "local"
     aigate_log_level: str = "INFO"
     aigate_request_id_header: str = "X-Request-ID"
 
