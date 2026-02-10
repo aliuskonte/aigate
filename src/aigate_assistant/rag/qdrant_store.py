@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -23,6 +24,67 @@ def _stable_point_id(*, kb_id: str, source_uri: str, chunk_index: int, chunk_tex
     # UUID5 expects a namespace UUID. Use a fixed one derived from the hash prefix.
     ns = uuid.UUID("00000000-0000-0000-0000-000000000000")
     return str(uuid.uuid5(ns, h.hexdigest()))
+
+
+def _slugify(s: str, *, max_len: int = 64) -> str:
+    s = (s or "").strip().lower()
+    s = s.replace("/", "__")
+    s = re.sub(r"[^a-z0-9_\\-\\.]", "_", s)
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s[:max_len] if len(s) > max_len else s
+
+
+def build_collection_name(*, base_alias: str, embed_model: str, vector_dim: int) -> str:
+    """
+    Build a versioned collection name derived from:
+    - base alias (stable name used by API)
+    - embed model
+    - vector dim
+    """
+
+    alias = _slugify(base_alias, max_len=48) or "kb"
+    model = _slugify(embed_model, max_len=64) or "embed"
+    dim = int(vector_dim)
+    return f"{alias}__{model}__dim{dim}"
+
+
+async def set_collection_alias(
+    *,
+    qdrant: AsyncQdrantClient,
+    alias_name: str,
+    collection_name: str,
+) -> None:
+    """
+    Ensure alias points to the target collection.
+    Safe to call repeatedly.
+    """
+
+    # If alias already points to collection, do nothing.
+    aliases = await qdrant.get_aliases()
+    for a in aliases.aliases:
+        if a.alias_name == alias_name and a.collection_name == collection_name:
+            return
+
+    ops = [
+        qmodels.DeleteAliasOperation(delete_alias=qmodels.DeleteAlias(alias_name=alias_name)),
+        qmodels.CreateAliasOperation(
+            create_alias=qmodels.CreateAlias(collection_name=collection_name, alias_name=alias_name)
+        ),
+    ]
+    try:
+        await qdrant.update_collection_aliases(ops)
+    except Exception:
+        # If delete failed because alias didn't exist, try create only.
+        await qdrant.update_collection_aliases(
+            [
+                qmodels.CreateAliasOperation(
+                    create_alias=qmodels.CreateAlias(
+                        collection_name=collection_name,
+                        alias_name=alias_name,
+                    )
+                )
+            ]
+        )
 
 
 @dataclass(frozen=True)

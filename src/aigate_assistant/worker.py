@@ -12,7 +12,12 @@ from aigate.storage.db import create_engine, create_sessionmaker
 from aigate_assistant.core.config import get_assistant_settings
 from aigate_assistant.rag.chunking import chunk_markdown
 from aigate_assistant.rag.embeddings import Embedder
-from aigate_assistant.rag.qdrant_store import ensure_collection, upsert_chunks
+from aigate_assistant.rag.qdrant_store import (
+    build_collection_name,
+    ensure_collection,
+    set_collection_alias,
+    upsert_chunks,
+)
 from aigate_assistant.storage.repos import (
     get_job,
     set_job_failed,
@@ -78,9 +83,11 @@ async def process_job(
         total_chunks = 0
         total_points = 0
 
-        # Ensure collection exists (needs dim). We'll infer dim from the first non-empty chunk.
+        # We version Qdrant collections by embed model + dim and switch via alias
+        # (settings.assistant_qdrant_collection is treated as an alias).
         collection_ready = False
         collection_dim = None
+        target_collection: str | None = None
 
         for idx, path in enumerate(files, start=1):
             raw = path.read_bytes()
@@ -123,15 +130,20 @@ async def process_job(
                     )
                 continue
 
-            emb = embedder.embed_texts(chunks)
+            emb = embedder.embed_documents(chunks)
             if not collection_ready:
                 collection_dim = emb.dim
-                await ensure_collection(qdrant=qdrant, collection=settings.assistant_qdrant_collection, vector_dim=emb.dim)
+                target_collection = build_collection_name(
+                    base_alias=settings.assistant_qdrant_collection,
+                    embed_model=embedder.model_name,
+                    vector_dim=emb.dim,
+                )
+                await ensure_collection(qdrant=qdrant, collection=target_collection, vector_dim=emb.dim)
                 collection_ready = True
 
             points = await upsert_chunks(
                 qdrant=qdrant,
-                collection=settings.assistant_qdrant_collection,
+                collection=target_collection or settings.assistant_qdrant_collection,
                 kb_id=kb_id,
                 source_uri=rel_uri,
                 vectors=emb.vectors,
@@ -165,8 +177,19 @@ async def process_job(
                         "chunks": total_chunks,
                         "points": total_points,
                         "collection_dim": collection_dim,
+                        "collection_alias": settings.assistant_qdrant_collection,
+                        "collection_target": target_collection,
+                        "embed_model": embedder.model_name,
                     },
                 )
+
+        # Atomic switch: point alias to the newly built collection after successful ingest.
+        if target_collection is not None:
+            await set_collection_alias(
+                qdrant=qdrant,
+                alias_name=settings.assistant_qdrant_collection,
+                collection_name=target_collection,
+            )
 
         async with sessionmaker() as session:
             await set_job_succeeded(
@@ -181,6 +204,9 @@ async def process_job(
                     "chunks": total_chunks,
                     "points": total_points,
                     "collection_dim": collection_dim,
+                    "collection_alias": settings.assistant_qdrant_collection,
+                    "collection_target": target_collection,
+                    "embed_model": embedder.model_name,
                 },
             )
     except Exception as e:
