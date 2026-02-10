@@ -45,8 +45,9 @@ async def get_auth_context(
             raise unauthorized("Invalid API key")
         return AuthContext(org_id=row.org_id, api_key=api_key)
 
-    # Fallback: dev/test without DB configured.
-    if settings.aigate_env in ("dev", "test"):
+    # Fallback: local/dev/test without DB configured.
+    # `dev` is a backward-compatible alias of `local`.
+    if settings.aigate_env in ("local", "dev", "test"):
         return AuthContext(org_id="dev-org", api_key=api_key)
 
     raise unauthorized("API key validation is not configured")
