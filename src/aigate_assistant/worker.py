@@ -62,7 +62,9 @@ async def process_job(
     try:
         docs_root = Path("/app/docs")
         mb_root = Path("/app/memory-bank")
-        files = _iter_source_files(docs_root) + _iter_source_files(mb_root)
+        docs_files = _iter_source_files(docs_root)
+        mb_files = _iter_source_files(mb_root)
+        files = docs_files + mb_files
         if not files:
             async with sessionmaker() as session:
                 await set_job_succeeded(
@@ -105,7 +107,16 @@ async def process_job(
                         session=session,
                         job_id=job_id,
                         progress=idx / total_files,
-                        stats={"files_total": total_files, "files_done": idx, "chunks": total_chunks, "points": total_points},
+                        stats={
+                            "sources": {
+                                "docs": {"root": str(docs_root), "files": len(docs_files)},
+                                "memory_bank": {"root": str(mb_root), "files": len(mb_files)},
+                            },
+                            "files_total": total_files,
+                            "files_done": idx,
+                            "chunks": total_chunks,
+                            "points": total_points,
+                        },
                     )
                 continue
 
@@ -141,6 +152,10 @@ async def process_job(
                     job_id=job_id,
                     progress=idx / total_files,
                     stats={
+                        "sources": {
+                            "docs": {"root": str(docs_root), "files": len(docs_files)},
+                            "memory_bank": {"root": str(mb_root), "files": len(mb_files)},
+                        },
                         "files_total": total_files,
                         "files_done": idx,
                         "chunks": total_chunks,
@@ -154,6 +169,10 @@ async def process_job(
                 session=session,
                 job_id=job_id,
                 stats={
+                    "sources": {
+                        "docs": {"root": str(docs_root), "files": len(docs_files)},
+                        "memory_bank": {"root": str(mb_root), "files": len(mb_files)},
+                    },
                     "files_total": total_files,
                     "chunks": total_chunks,
                     "points": total_points,
