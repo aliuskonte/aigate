@@ -52,6 +52,7 @@ class Source(BaseModel):
     source_uri: str
     score: float
     text_preview: str
+    section_path: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -142,12 +143,18 @@ async def chat(
     context_blocks: list[str] = []
     sources: list[Source] = []
     for i, c in enumerate(chunks, start=1):
-        context_blocks.append(f"[{i}] ({c.source_uri})\n{c.text}")
+        section_path = (c.payload or {}).get("section_path")
+        prefix = f"[{i}] ({c.source_uri}"
+        if section_path:
+            prefix += f" — {section_path}"
+        prefix += ")"
+        context_blocks.append(f"{prefix}\n{c.text}")
         sources.append(
             Source(
                 source_uri=c.source_uri,
                 score=c.score,
                 text_preview=c.text[:200].replace("\n", " ").strip(),
+                section_path=str(section_path) if section_path else None,
             )
         )
 
