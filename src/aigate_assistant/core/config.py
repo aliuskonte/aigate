@@ -40,6 +40,10 @@ class AssistantSettings(BaseSettings):
     assistant_chunk_size_tokens: int = 420
     assistant_chunk_overlap_tokens: int = 80
     assistant_top_k: int = 6
+    assistant_retrieval_candidate_k: int = 24
+    assistant_dedupe_enabled: bool = True
+    assistant_mmr_enabled: bool = True
+    assistant_mmr_lambda: float = 0.65
 
 
 @lru_cache

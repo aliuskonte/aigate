@@ -138,6 +138,10 @@ async def chat(
         query_vector=query_vec,
         top_k=top_k,
         kb_id=kb.id,
+        candidate_k=settings.assistant_retrieval_candidate_k,
+        dedupe_enabled=settings.assistant_dedupe_enabled,
+        mmr_enabled=settings.assistant_mmr_enabled,
+        mmr_lambda=settings.assistant_mmr_lambda,
     )
 
     context_blocks: list[str] = []

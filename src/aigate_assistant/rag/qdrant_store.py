@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import uuid
 from dataclasses import dataclass
 from typing import Any
 
 from qdrant_client.async_qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models as qmodels
+
 
 
 def _stable_point_id(*, kb_id: str, source_uri: str, chunk_index: int, chunk_text: str) -> str:
@@ -29,6 +31,89 @@ class RetrievedChunk:
     text: str
     source_uri: str
     payload: dict[str, Any]
+    vector: list[float] | None = None
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = 0.0
+    na = 0.0
+    nb = 0.0
+    for x, y in zip(a, b, strict=True):
+        dot += x * y
+        na += x * x
+        nb += y * y
+    if na <= 0.0 or nb <= 0.0:
+        return 0.0
+    return dot / (math.sqrt(na) * math.sqrt(nb))
+
+
+def _dedupe(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
+    """
+    Remove duplicates by (source_uri, section_path, chunk_index). Keep best score.
+    """
+
+    best: dict[tuple[str, str, int], RetrievedChunk] = {}
+    for c in chunks:
+        section = str((c.payload or {}).get("section_path") or "")
+        idx = int((c.payload or {}).get("chunk_index") or 0)
+        key = (c.source_uri, section, idx)
+        prev = best.get(key)
+        if prev is None or c.score > prev.score:
+            best[key] = c
+    return sorted(best.values(), key=lambda x: x.score, reverse=True)
+
+
+def _mmr_select(
+    *,
+    query_vector: list[float],
+    candidates: list[RetrievedChunk],
+    k: int,
+    lambda_mult: float,
+) -> list[RetrievedChunk]:
+    """
+    MMR (Maximal Marginal Relevance): pick chunks relevant to the query but diverse
+    relative to already selected chunks.
+    """
+
+    k = max(0, int(k))
+    if k == 0 or not candidates:
+        return []
+
+    lambda_mult = max(0.0, min(1.0, float(lambda_mult)))
+
+    # If vectors are missing, fall back to score-only selection.
+    if not query_vector or any(c.vector is None for c in candidates):
+        return candidates[:k]
+
+    selected: list[RetrievedChunk] = []
+    remaining = candidates[:]
+
+    while remaining and len(selected) < k:
+        best_item: RetrievedChunk | None = None
+        best_mmr: float | None = None
+
+        for cand in remaining:
+            sim_to_query = _cosine(query_vector, cand.vector or [])
+            if not selected:
+                mmr = sim_to_query
+            else:
+                max_sim_to_selected = max(
+                    _cosine((cand.vector or []), (s.vector or [])) for s in selected
+                )
+                mmr = lambda_mult * sim_to_query - (1.0 - lambda_mult) * max_sim_to_selected
+
+            if best_mmr is None or mmr > best_mmr:
+                best_mmr = mmr
+                best_item = cand
+
+        if best_item is None:
+            break
+        selected.append(best_item)
+        remaining.remove(best_item)
+
+    return selected
 
 
 async def ensure_collection(
@@ -106,15 +191,24 @@ async def search(
     query_vector: list[float],
     top_k: int,
     kb_id: str,
+    candidate_k: int | None = None,
+    dedupe_enabled: bool = True,
+    mmr_enabled: bool = True,
+    mmr_lambda: float = 0.65,
 ) -> list[RetrievedChunk]:
     if not query_vector:
         return []
 
+    top_k = max(1, int(top_k))
+    candidate_k = int(candidate_k or (top_k * 4))
+    candidate_k = max(top_k, min(candidate_k, 100))
+
     res = await qdrant.query_points(
         collection_name=collection,
         query=query_vector,
-        limit=top_k,
+        limit=candidate_k,
         with_payload=True,
+        with_vectors=True,
         query_filter=qmodels.Filter(
             must=[
                 qmodels.FieldCondition(
@@ -128,13 +222,33 @@ async def search(
     out: list[RetrievedChunk] = []
     for p in res.points:
         payload = dict(p.payload or {})
+        vec: list[float] | None = None
+        try:
+            # For single-vector collections, Qdrant returns a list[float].
+            if isinstance(p.vector, list):
+                vec = [float(x) for x in p.vector]
+            # Some clients/versions can return dict[name -> vector].
+            elif isinstance(p.vector, dict) and p.vector:
+                first = next(iter(p.vector.values()))
+                if isinstance(first, list):
+                    vec = [float(x) for x in first]
+        except Exception:
+            vec = None
         out.append(
             RetrievedChunk(
                 score=float(p.score),
                 text=str(payload.get("text") or ""),
                 source_uri=str(payload.get("source_uri") or ""),
                 payload=payload,
+                vector=vec,
             )
         )
+
+    if dedupe_enabled:
+        out = _dedupe(out)
+    if mmr_enabled:
+        out = _mmr_select(query_vector=query_vector, candidates=out, k=top_k, lambda_mult=mmr_lambda)
+    else:
+        out = out[:top_k]
     return out
 
