@@ -11,3 +11,4 @@ Pipfile.lock
 # optional local docs
 memory-bank/
 .c*
+env.prod
