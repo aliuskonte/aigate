@@ -95,6 +95,9 @@ services:
     command: ["aigate_assistant.main:app", "--host", "0.0.0.0", "--port", "8010"]
     ports:
       - "8010:8010"
+    volumes:
+      # Optional private RAG sources (ignored by git). If missing/empty, only docs/ are indexed.
+      - ./memory-bank:/app/memory-bank:ro
     restart: unless-stopped
 
   assistant-worker:
@@ -122,6 +125,9 @@ services:
       ASSISTANT_REDIS_QUEUE_KEY: ${ASSISTANT_REDIS_QUEUE_KEY:-assistant:ingest:queue}
     entrypoint: ["python"]
     command: ["-m", "aigate_assistant.worker"]
+    volumes:
+      # Optional private RAG sources (ignored by git). If missing/empty, only docs/ are indexed.
+      - ./memory-bank:/app/memory-bank:ro
     restart: unless-stopped
 
 networks:
