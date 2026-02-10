@@ -17,6 +17,7 @@ psycopg = {extras = ["binary"], version = "*"}
 prometheus-client = "*"
 qdrant-client = "==1.16.2"
 fastembed = "==0.7.4"
+tiktoken = "==0.12.0"
 
 [dev-packages]
 pytest = "*"

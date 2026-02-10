@@ -37,6 +37,8 @@ class AssistantSettings(BaseSettings):
     # RAG defaults
     assistant_chunk_size_chars: int = 1200
     assistant_chunk_overlap_chars: int = 200
+    assistant_chunk_size_tokens: int = 420
+    assistant_chunk_overlap_tokens: int = 80
     assistant_top_k: int = 6
 
 
