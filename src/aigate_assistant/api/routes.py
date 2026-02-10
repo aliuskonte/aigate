@@ -48,6 +48,12 @@ class ChatRequest(BaseModel):
     top_k: int | None = Field(default=None, ge=1, le=20)
 
 
+class RetrieveRequest(BaseModel):
+    kb_name: str = Field(default="default", min_length=1, max_length=200)
+    message: str = Field(min_length=1, max_length=20_000)
+    top_k: int | None = Field(default=None, ge=1, le=50)
+
+
 class Source(BaseModel):
     source_uri: str
     score: float
@@ -58,6 +64,10 @@ class Source(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     model: str
+    sources: list[Source]
+
+
+class RetrieveResponse(BaseModel):
     sources: list[Source]
 
 
@@ -209,4 +219,61 @@ async def chat(
         raise HTTPException(status_code=502, detail="Unexpected AIGate response format")
 
     return ChatResponse(answer=answer, model=settings.assistant_llm_model, sources=sources)
+
+
+@router.post("/v1/assistant/retrieve", response_model=RetrieveResponse)
+async def retrieve(
+    body: RetrieveRequest,
+    session: AsyncSession | None = Depends(get_db_session),
+    qdrant=Depends(get_qdrant),
+    embedder: Embedder | None = Depends(get_embedder),
+):
+    """
+    Retrieval-only endpoint for evaluation/debugging.
+    Returns the selected chunks metadata without calling the LLM.
+    """
+
+    if session is None:
+        raise HTTPException(status_code=500, detail="DB is not configured")
+    if qdrant is None:
+        raise HTTPException(status_code=500, detail="Qdrant is not configured")
+    if embedder is None:
+        raise HTTPException(status_code=500, detail="Embedder is not configured")
+
+    settings = get_assistant_settings()
+    kb = await get_or_create_kb(session=session, name=body.kb_name)
+
+    top_k = body.top_k or settings.assistant_top_k
+    query_vec = embedder.embed_query(body.message)
+    try:
+        chunks = await qdrant_search(
+            qdrant=qdrant,
+            collection=settings.assistant_qdrant_collection,
+            query_vector=query_vec,
+            top_k=top_k,
+            kb_id=kb.id,
+            candidate_k=settings.assistant_retrieval_candidate_k,
+            dedupe_enabled=settings.assistant_dedupe_enabled,
+            mmr_enabled=settings.assistant_mmr_enabled,
+            mmr_lambda=settings.assistant_mmr_lambda,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=409,
+            detail=f"KB is not indexed yet (run /v1/assistant/ingest). Qdrant error: {e}",
+        ) from e
+
+    sources: list[Source] = []
+    for c in chunks:
+        section_path = (c.payload or {}).get("section_path")
+        sources.append(
+            Source(
+                source_uri=c.source_uri,
+                score=c.score,
+                text_preview=c.text[:200].replace("\n", " ").strip(),
+                section_path=str(section_path) if section_path else None,
+            )
+        )
+
+    return RetrieveResponse(sources=sources)
 

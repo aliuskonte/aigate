@@ -67,3 +67,21 @@ curl -s -X POST http://localhost:8010/v1/assistant/chat \
 
 Ответ содержит `sources[]` — откуда был взят контекст.
 
+## Eval (оценка retrieval)
+
+Это полезно, если важнее качество ответа: сначала меряем, насколько хорошо retrieval (поиск чанков) находит нужные источники, без затрат на LLM.
+
+1) Убедись, что ingestion уже был запущен и job завершился `succeeded`.
+
+2) Прогон eval-набора (печатает JSON по кейсам + итоговый summary):
+
+```bash
+PYTHONPATH=src pipenv run python scripts/assistant_eval.py --eval eval/assistant_eval.jsonl
+```
+
+Опционально можно включить `--chat`, чтобы дополнительно проверить валидность ссылок `[N]` в ответе (будет вызывать LLM через AIGate и тратить токены):
+
+```bash
+PYTHONPATH=src pipenv run python scripts/assistant_eval.py --eval eval/assistant_eval.jsonl --chat --aigate-api-key <aigate_client_key>
+```
+
