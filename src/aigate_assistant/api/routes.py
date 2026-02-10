@@ -132,17 +132,24 @@ async def chat(
 
     top_k = body.top_k or settings.assistant_top_k
     query_vec = embedder.embed_query(body.message)
-    chunks = await qdrant_search(
-        qdrant=qdrant,
-        collection=settings.assistant_qdrant_collection,
-        query_vector=query_vec,
-        top_k=top_k,
-        kb_id=kb.id,
-        candidate_k=settings.assistant_retrieval_candidate_k,
-        dedupe_enabled=settings.assistant_dedupe_enabled,
-        mmr_enabled=settings.assistant_mmr_enabled,
-        mmr_lambda=settings.assistant_mmr_lambda,
-    )
+    try:
+        chunks = await qdrant_search(
+            qdrant=qdrant,
+            collection=settings.assistant_qdrant_collection,
+            query_vector=query_vec,
+            top_k=top_k,
+            kb_id=kb.id,
+            candidate_k=settings.assistant_retrieval_candidate_k,
+            dedupe_enabled=settings.assistant_dedupe_enabled,
+            mmr_enabled=settings.assistant_mmr_enabled,
+            mmr_lambda=settings.assistant_mmr_lambda,
+        )
+    except Exception as e:
+        # Common case: alias/collection not created yet (run ingest first).
+        raise HTTPException(
+            status_code=409,
+            detail=f"KB is not indexed yet (run /v1/assistant/ingest). Qdrant error: {e}",
+        ) from e
 
     context_blocks: list[str] = []
     sources: list[Source] = []
