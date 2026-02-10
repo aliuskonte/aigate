@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from aigate.storage.db import create_engine, create_sessionmaker
 from aigate_assistant.core.config import get_assistant_settings
-from aigate_assistant.rag.chunking import chunk_text
+from aigate_assistant.rag.chunking import chunk_markdown
 from aigate_assistant.rag.embeddings import Embedder
 from aigate_assistant.rag.qdrant_store import ensure_collection, upsert_chunks
 from aigate_assistant.storage.repos import (
@@ -89,11 +89,14 @@ async def process_job(
 
             rel_uri = str(path.relative_to(Path("/app")))
 
-            chunks = chunk_text(
+            md_chunks = chunk_markdown(
                 text=text,
-                chunk_size=settings.assistant_chunk_size_chars,
-                overlap=settings.assistant_chunk_overlap_chars,
+                max_tokens=settings.assistant_chunk_size_tokens,
+                overlap_tokens=settings.assistant_chunk_overlap_tokens,
+                fallback_chunk_size_chars=settings.assistant_chunk_size_chars,
+                fallback_overlap_chars=settings.assistant_chunk_overlap_chars,
             )
+            chunks = [c.text for c in md_chunks]
             if not chunks:
                 async with sessionmaker() as session:
                     await upsert_document(
@@ -133,6 +136,7 @@ async def process_job(
                 source_uri=rel_uri,
                 vectors=emb.vectors,
                 chunks=chunks,
+                per_chunk_payload=[{"section_path": c.section_path} for c in md_chunks],
                 extra_payload={"content_hash": content_hash},
             )
 
