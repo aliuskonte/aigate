@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,6 +71,35 @@ async def set_job_succeeded(*, session: AsyncSession, job_id: str, stats: dict |
 
 async def get_job(*, session: AsyncSession, job_id: str) -> AssistantIngestJob | None:
     return await session.scalar(select(AssistantIngestJob).where(AssistantIngestJob.id == job_id))
+
+
+async def get_document(
+    *,
+    session: AsyncSession,
+    kb_id: str,
+    source_uri: str,
+) -> AssistantDocument | None:
+    return await session.scalar(
+        select(AssistantDocument).where(
+            AssistantDocument.kb_id == kb_id,
+            AssistantDocument.source_uri == source_uri,
+        )
+    )
+
+
+async def list_documents_by_kb(*, session: AsyncSession, kb_id: str) -> list[AssistantDocument]:
+    res = await session.execute(select(AssistantDocument).where(AssistantDocument.kb_id == kb_id))
+    return list(res.scalars().all())
+
+
+async def delete_document(*, session: AsyncSession, kb_id: str, source_uri: str) -> None:
+    await session.execute(
+        delete(AssistantDocument).where(
+            AssistantDocument.kb_id == kb_id,
+            AssistantDocument.source_uri == source_uri,
+        )
+    )
+    await session.commit()
 
 
 async def upsert_document(

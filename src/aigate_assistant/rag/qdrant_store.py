@@ -87,6 +87,37 @@ async def set_collection_alias(
         )
 
 
+async def delete_by_source_uri(
+    *,
+    qdrant: AsyncQdrantClient,
+    collection: str,
+    kb_id: str,
+    source_uri: str,
+) -> None:
+    """
+    Delete all points for a specific (kb_id, source_uri) in the given collection/alias.
+    """
+
+    await qdrant.delete(
+        collection_name=collection,
+        points_selector=qmodels.FilterSelector(
+            filter=qmodels.Filter(
+                must=[
+                    qmodels.FieldCondition(
+                        key="kb_id",
+                        match=qmodels.MatchValue(value=kb_id),
+                    ),
+                    qmodels.FieldCondition(
+                        key="source_uri",
+                        match=qmodels.MatchValue(value=source_uri),
+                    ),
+                ]
+            )
+        ),
+        wait=True,
+    )
+
+
 @dataclass(frozen=True)
 class RetrievedChunk:
     score: float

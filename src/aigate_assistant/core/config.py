@@ -46,6 +46,11 @@ class AssistantSettings(BaseSettings):
     assistant_mmr_enabled: bool = True
     assistant_mmr_lambda: float = 0.65
 
+    # Indexing behaviour
+    assistant_incremental_indexing: bool = True
+    assistant_cleanup_stale: bool = True
+    assistant_cleanup_changed: bool = True
+
 
 @lru_cache
 def get_assistant_settings() -> AssistantSettings:
