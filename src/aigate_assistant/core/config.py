@@ -29,7 +29,8 @@ class AssistantSettings(BaseSettings):
     assistant_qdrant_collection: str = "aigate_kb_default"
 
     # Supported by fastembed (see TextEmbedding.list_supported_models()).
-    assistant_embed_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # Default prioritizes multilingual quality (RU/EN).
+    assistant_embed_model: str = "intfloat/multilingual-e5-large"
 
     # Ingestion
     assistant_redis_queue_key: str = "assistant:ingest:queue"
