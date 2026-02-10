@@ -10,9 +10,10 @@ __pycache__
 .ruff_cache
 .mypy_cache
 tests/
-memory-bank/
 *.md
 !README.md
+!docs/**/*.md
+memory-bank/
 Pipfile
 Pipfile.lock
 requirements-dev.txt

@@ -18,7 +18,7 @@ Content-Type: application/json
 
 | Заголовок | Описание |
 |-----------|----------|
-| `X-Timeout` | Таймаут запроса к провайдеру в секундах (число, например `60` или `90.5`). Ограничивается серверным максимумом; при отсутствии используется значение по умолчанию. |
+| `X-Timeout` | Таймаут запроса к провайдеру в секундах (число, например `60` или `90.5`). **Это header запроса** (Postman → вкладка **Headers**). Значение ограничивается серверным максимумом (`QWEN_TIMEOUT_MAX_SECONDS`); при отсутствии/невалидном значении используется `QWEN_TIMEOUT_DEFAULT_SECONDS`. |
 
 ## Endpoints
 
@@ -36,6 +36,7 @@ Content-Type: application/json
 curl -s -X POST https://api.example.com/v1/chat/completions \
   -H "Authorization: Bearer <API_KEY>" \
   -H "Content-Type: application/json" \
+  -H "X-Timeout: 300" \
   -d '{"model":"qwen:qwen-flash","messages":[{"role":"user","content":"Привет"}]}' | jq
 ```
 
@@ -49,6 +50,7 @@ curl -s -X POST https://api.example.com/v1/chat/completions \
 curl -s -N -X POST https://api.example.com/v1/chat/completions \
   -H "Authorization: Bearer <API_KEY>" \
   -H "Content-Type: application/json" \
+  -H "X-Timeout: 300" \
   -d '{"model":"qwen:qwen-flash","messages":[{"role":"user","content":"Привет"}],"stream":true}'
 ```
 

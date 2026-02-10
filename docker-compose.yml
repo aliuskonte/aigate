@@ -25,6 +25,15 @@ services:
       timeout: 3s
       retries: 20
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: aigate-qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+    restart: unless-stopped
+
   aigate:
     build:
       context: .
@@ -53,9 +62,78 @@ services:
       - default
       - monitoring
 
+  assistant-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aigate-assistant-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      aigate:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      AIGATE_ENV: prod
+      AIGATE_LOG_LEVEL: WARNING
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aigate}
+      REDIS_URL: redis://redis:6379/0
+      ASSISTANT_AIGATE_BASE_URL: ${ASSISTANT_AIGATE_BASE_URL:-http://aigate:8000}
+      ASSISTANT_AIGATE_API_KEY: ${ASSISTANT_AIGATE_API_KEY:-${AIGATE_API_KEY}}
+      ASSISTANT_API_KEY: ${ASSISTANT_API_KEY:-}
+      ASSISTANT_LLM_MODEL: ${ASSISTANT_LLM_MODEL:-qwen:qwen-plus}
+      ASSISTANT_QDRANT_URL: ${ASSISTANT_QDRANT_URL:-http://qdrant:6333}
+      ASSISTANT_QDRANT_COLLECTION: ${ASSISTANT_QDRANT_COLLECTION:-aigate_kb_default}
+      ASSISTANT_EMBED_MODEL: ${ASSISTANT_EMBED_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      ASSISTANT_REDIS_QUEUE_KEY: ${ASSISTANT_REDIS_QUEUE_KEY:-assistant:ingest:queue}
+    entrypoint: ["uvicorn"]
+    command: ["aigate_assistant.main:app", "--host", "0.0.0.0", "--port", "8010"]
+    ports:
+      - "8010:8010"
+    volumes:
+      # Optional private RAG sources (ignored by git). If missing/empty, only docs/ are indexed.
+      - ./memory-bank:/app/memory-bank:ro
+    restart: unless-stopped
+
+  assistant-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aigate-assistant-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      AIGATE_ENV: prod
+      AIGATE_LOG_LEVEL: WARNING
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aigate}
+      REDIS_URL: redis://redis:6379/0
+      ASSISTANT_QDRANT_URL: ${ASSISTANT_QDRANT_URL:-http://qdrant:6333}
+      ASSISTANT_QDRANT_COLLECTION: ${ASSISTANT_QDRANT_COLLECTION:-aigate_kb_default}
+      ASSISTANT_EMBED_MODEL: ${ASSISTANT_EMBED_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      ASSISTANT_REDIS_QUEUE_KEY: ${ASSISTANT_REDIS_QUEUE_KEY:-assistant:ingest:queue}
+    entrypoint: ["python"]
+    command: ["-m", "aigate_assistant.worker"]
+    volumes:
+      # Optional private RAG sources (ignored by git). If missing/empty, only docs/ are indexed.
+      - ./memory-bank:/app/memory-bank:ro
+    restart: unless-stopped
+
 networks:
   monitoring:
     name: aigate_monitoring
 
 volumes:
   postgres_data:
+  qdrant_data:
