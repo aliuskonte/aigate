@@ -1,6 +1,6 @@
 # AIGate Assistant (Iteration 1) — Quickstart
 
-Цель: поднять локально `assistant-api` + `assistant-worker` + `qdrant` и получить рабочий RAG-чат по `docs/` и `memory-bank/`.
+Цель: поднять локально `assistant-api` + `assistant-worker` + `qdrant` и получить рабочий RAG-чат по `docs/` (+ опционально приватный `memory-bank/` через volume mount).
 
 ## Предусловия
 
@@ -16,6 +16,13 @@ docker compose up -d --build
 
 AIGate: `http://localhost:8000`  
 Assistant: `http://localhost:8010`
+
+## Приватный `memory-bank/` (не в репозитории)
+
+`memory-bank/` по умолчанию **не должен быть в git**. Для RAG он подключается как локальная папка через bind mount (volume).
+
+- Если `./memory-bank` существует — worker проиндексирует `docs/` + `memory-bank/`.
+- Если `./memory-bank` отсутствует/пустой — проиндексируется только `docs/`.
 
 ## Сиды (один раз)
 
