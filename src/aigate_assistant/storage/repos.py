@@ -6,7 +6,14 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from aigate.storage.models import AssistantDocument, AssistantIngestJob, AssistantKnowledgeBase
+from aigate.storage.models import (
+    AgentRun,
+    AgentRunStep,
+    AssistantDocument,
+    AssistantIngestJob,
+    AssistantKnowledgeBase,
+    AssistantTicket,
+)
 
 
 def utcnow() -> datetime:
@@ -123,4 +130,113 @@ async def upsert_document(
     )
     await session.execute(stmt)
     await session.commit()
+
+
+# --- Agent runs, steps, tickets ---
+
+
+async def create_agent_run(
+    *,
+    session: AsyncSession,
+    kb_id: str,
+    query: str,
+    input_payload: dict | None = None,
+) -> AgentRun:
+    run = AgentRun(
+        kb_id=kb_id,
+        status="running",
+        query=query,
+        input_payload=input_payload,
+    )
+    session.add(run)
+    await session.commit()
+    await session.refresh(run)
+    return run
+
+
+async def set_agent_run_finished(
+    *,
+    session: AsyncSession,
+    run_id: str,
+    status: str,
+    output_payload: dict | None = None,
+    error: str | None = None,
+) -> None:
+    await session.execute(
+        update(AgentRun)
+        .where(AgentRun.id == run_id)
+        .values(
+            status=status,
+            output_payload=output_payload,
+            error=error,
+            finished_at=utcnow(),
+        )
+    )
+    await session.commit()
+
+
+async def add_agent_run_step(
+    *,
+    session: AsyncSession,
+    run_id: str,
+    node_name: str,
+    step_order: int,
+    started_at: datetime,
+    finished_at: datetime | None = None,
+    latency_ms: int | None = None,
+    input_snapshot: dict | None = None,
+    output_snapshot: dict | None = None,
+    error: str | None = None,
+) -> None:
+    step = AgentRunStep(
+        run_id=run_id,
+        node_name=node_name,
+        step_order=step_order,
+        started_at=started_at,
+        finished_at=finished_at,
+        latency_ms=latency_ms,
+        input_snapshot=input_snapshot,
+        output_snapshot=output_snapshot,
+        error=error,
+    )
+    session.add(step)
+    await session.commit()
+
+
+async def get_agent_run(*, session: AsyncSession, run_id: str) -> AgentRun | None:
+    return await session.scalar(select(AgentRun).where(AgentRun.id == run_id))
+
+
+async def list_agent_run_steps(*, session: AsyncSession, run_id: str) -> list[AgentRunStep]:
+    res = await session.execute(
+        select(AgentRunStep).where(AgentRunStep.run_id == run_id).order_by(AgentRunStep.step_order)
+    )
+    return list(res.scalars().all())
+
+
+async def create_ticket(
+    *,
+    session: AsyncSession,
+    run_id: str | None,
+    ticket_type: str,
+    title: str,
+    context: dict | None = None,
+    severity: str = "normal",
+) -> AssistantTicket:
+    ticket = AssistantTicket(
+        run_id=run_id,
+        ticket_type=ticket_type,
+        title=title,
+        context=context,
+        severity=severity,
+        status="open",
+    )
+    session.add(ticket)
+    await session.commit()
+    await session.refresh(ticket)
+    return ticket
+
+
+async def get_ticket(*, session: AsyncSession, ticket_id: str) -> AssistantTicket | None:
+    return await session.scalar(select(AssistantTicket).where(AssistantTicket.id == ticket_id))
 

@@ -51,6 +51,10 @@ class AssistantSettings(BaseSettings):
     assistant_cleanup_stale: bool = True
     assistant_cleanup_changed: bool = True
 
+    # Agent tools (optional: leave empty to disable)
+    assistant_loki_url: str = ""  # e.g. http://loki:3100
+    assistant_prometheus_url: str = ""  # e.g. http://prometheus:9090
+
 
 @lru_cache
 def get_assistant_settings() -> AssistantSettings:

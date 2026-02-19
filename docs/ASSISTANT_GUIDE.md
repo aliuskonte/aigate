@@ -85,3 +85,27 @@ PYTHONPATH=src pipenv run python scripts/assistant_eval.py --eval eval/assistant
 PYTHONPATH=src pipenv run python scripts/assistant_eval.py --eval eval/assistant_eval.jsonl --chat --aigate-api-key <aigate_client_key>
 ```
 
+## Agent run (Iteration 2: LangGraph + trace + tickets)
+
+Прогон RAG через граф LangGraph (retrieve → generate → format) с сохранением run и trace (шаги), опционально — тикет для аудита.
+
+Запуск прогона:
+
+```bash
+curl -s -X POST http://localhost:8010/v1/agent/run \
+  -H 'Content-Type: application/json' \
+  -H 'X-AIGATE-API-KEY: <aigate_client_key>' \
+  -d '{"kb_name":"default","message":"Как запустить ingestion?","create_ticket":true}'
+```
+
+Ответ: `{"run_id":"...","ticket_id":"..."}` (ticket_id только при `create_ticket: true`).
+
+Получить run с trace и тикетом:
+
+```bash
+curl -s http://localhost:8010/v1/agent/runs/<run_id> \
+  -H 'Authorization: Bearer <ASSISTANT_API_KEY>'
+```
+
+В ответе: `status`, `query`, `output_payload` (formatted_answer, sources), `trace[]` (шаги retrieve/generate/format с latency_ms, input/output snapshot), `ticket_id` (если есть).
+
