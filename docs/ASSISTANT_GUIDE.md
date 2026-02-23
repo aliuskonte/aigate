@@ -67,3 +67,45 @@ curl -s -X POST http://localhost:8010/v1/assistant/chat \
 
 Ответ содержит `sources[]` — откуда был взят контекст.
 
+## Eval (оценка retrieval)
+
+Это полезно, если важнее качество ответа: сначала меряем, насколько хорошо retrieval (поиск чанков) находит нужные источники, без затрат на LLM.
+
+1) Убедись, что ingestion уже был запущен и job завершился `succeeded`.
+
+2) Прогон eval-набора (печатает JSON по кейсам + итоговый summary):
+
+```bash
+PYTHONPATH=src pipenv run python scripts/assistant_eval.py --eval eval/assistant_eval.jsonl
+```
+
+Опционально можно включить `--chat`, чтобы дополнительно проверить валидность ссылок `[N]` в ответе (будет вызывать LLM через AIGate и тратить токены):
+
+```bash
+PYTHONPATH=src pipenv run python scripts/assistant_eval.py --eval eval/assistant_eval.jsonl --chat --aigate-api-key <aigate_client_key>
+```
+
+## Agent run (Iteration 2: LangGraph + trace + tickets)
+
+Прогон RAG через граф LangGraph (retrieve → generate → format) с сохранением run и trace (шаги), опционально — тикет для аудита.
+
+Запуск прогона:
+
+```bash
+curl -s -X POST http://localhost:8010/v1/agent/run \
+  -H 'Content-Type: application/json' \
+  -H 'X-AIGATE-API-KEY: <aigate_client_key>' \
+  -d '{"kb_name":"default","message":"Как запустить ingestion?","create_ticket":true}'
+```
+
+Ответ: `{"run_id":"...","ticket_id":"..."}` (ticket_id только при `create_ticket: true`).
+
+Получить run с trace и тикетом:
+
+```bash
+curl -s http://localhost:8010/v1/agent/runs/<run_id> \
+  -H 'Authorization: Bearer <ASSISTANT_API_KEY>'
+```
+
+В ответе: `status`, `query`, `output_payload` (formatted_answer, sources), `trace[]` (шаги retrieve/generate/format с latency_ms, input/output snapshot), `ticket_id` (если есть).
+

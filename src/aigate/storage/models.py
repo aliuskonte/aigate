@@ -147,3 +147,56 @@ class AssistantIngestJob(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentRun(Base):
+    """One agent run (e.g. RAG graph execution)."""
+
+    __tablename__ = "agent_runs"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    kb_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("assistant_kbs.id"), nullable=False, index=True)
+
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")  # running | succeeded | failed
+    query: Mapped[str] = mapped_column(String(20_000), nullable=False)
+    input_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    output_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentRunStep(Base):
+    """One step in agent run trace (e.g. retrieve, generate, format)."""
+
+    __tablename__ = "agent_run_steps"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    run_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("agent_runs.id"), nullable=False, index=True)
+
+    node_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    step_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    input_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    output_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
+
+class AssistantTicket(Base):
+    """Ticket created by agent (audit trail / human-in-the-loop)."""
+
+    __tablename__ = "assistant_tickets"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
+    run_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("agent_runs.id"), nullable=True, index=True)
+
+    ticket_type: Mapped[str] = mapped_column(String(32), nullable=False, default="info")  # info | action_request | ...
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")  # low | normal | high
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")  # open | approved | rejected
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

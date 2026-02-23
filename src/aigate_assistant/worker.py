@@ -10,11 +10,19 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from aigate.storage.db import create_engine, create_sessionmaker
 from aigate_assistant.core.config import get_assistant_settings
-from aigate_assistant.rag.chunking import chunk_text
+from aigate_assistant.rag.chunking import chunk_markdown
 from aigate_assistant.rag.embeddings import Embedder
-from aigate_assistant.rag.qdrant_store import ensure_collection, upsert_chunks
+from aigate_assistant.rag.qdrant_store import (
+    build_collection_name,
+    delete_by_source_uri,
+    ensure_collection,
+    set_collection_alias,
+    upsert_chunks,
+)
 from aigate_assistant.storage.repos import (
+    delete_document,
     get_job,
+    list_documents_by_kb,
     set_job_failed,
     set_job_progress,
     set_job_running,
@@ -77,10 +85,20 @@ async def process_job(
         total_files = len(files)
         total_chunks = 0
         total_points = 0
+        total_skipped = 0
+        total_deleted = 0
 
-        # Ensure collection exists (needs dim). We'll infer dim from the first non-empty chunk.
+        # We version Qdrant collections by embed model + dim and switch via alias
+        # (settings.assistant_qdrant_collection is treated as an alias).
         collection_ready = False
         collection_dim = None
+        target_collection: str | None = None
+        current_source_uris = {str(p.relative_to(Path("/app"))) for p in files}
+
+        # Load current DB document hashes to support incremental indexing and stale cleanup.
+        async with sessionmaker() as session:
+            docs_in_db = await list_documents_by_kb(session=session, kb_id=kb_id)
+        db_by_uri = {d.source_uri: d for d in docs_in_db}
 
         for idx, path in enumerate(files, start=1):
             raw = path.read_bytes()
@@ -89,11 +107,39 @@ async def process_job(
 
             rel_uri = str(path.relative_to(Path("/app")))
 
-            chunks = chunk_text(
+            if settings.assistant_incremental_indexing:
+                prev = db_by_uri.get(rel_uri)
+                if prev is not None and prev.content_hash == content_hash:
+                    total_skipped += 1
+                    async with sessionmaker() as session:
+                        await set_job_progress(
+                            session=session,
+                            job_id=job_id,
+                            progress=idx / total_files,
+                            stats={
+                                "sources": {
+                                    "docs": {"root": str(docs_root), "files": len(docs_files)},
+                                    "memory_bank": {"root": str(mb_root), "files": len(mb_files)},
+                                },
+                                "files_total": total_files,
+                                "files_done": idx,
+                                "files_skipped": total_skipped,
+                                "files_deleted": total_deleted,
+                                "chunks": total_chunks,
+                                "points": total_points,
+                                "embed_model": embedder.model_name,
+                            },
+                        )
+                    continue
+
+            md_chunks = chunk_markdown(
                 text=text,
-                chunk_size=settings.assistant_chunk_size_chars,
-                overlap=settings.assistant_chunk_overlap_chars,
+                max_tokens=settings.assistant_chunk_size_tokens,
+                overlap_tokens=settings.assistant_chunk_overlap_tokens,
+                fallback_chunk_size_chars=settings.assistant_chunk_size_chars,
+                fallback_overlap_chars=settings.assistant_chunk_overlap_chars,
             )
+            chunks = [c.text for c in md_chunks]
             if not chunks:
                 async with sessionmaker() as session:
                     await upsert_document(
@@ -114,25 +160,43 @@ async def process_job(
                             },
                             "files_total": total_files,
                             "files_done": idx,
+                            "files_skipped": total_skipped,
+                            "files_deleted": total_deleted,
                             "chunks": total_chunks,
                             "points": total_points,
                         },
                     )
                 continue
 
-            emb = embedder.embed_texts(chunks)
+            emb = embedder.embed_documents(chunks)
             if not collection_ready:
                 collection_dim = emb.dim
-                await ensure_collection(qdrant=qdrant, collection=settings.assistant_qdrant_collection, vector_dim=emb.dim)
+                target_collection = build_collection_name(
+                    base_alias=settings.assistant_qdrant_collection,
+                    embed_model=embedder.model_name,
+                    vector_dim=emb.dim,
+                )
+                await ensure_collection(qdrant=qdrant, collection=target_collection, vector_dim=emb.dim)
                 collection_ready = True
+
+            if settings.assistant_cleanup_changed:
+                # Remove old points for this file in the target collection (or alias if target not known).
+                # This prevents stale chunks from accumulating when the file changes.
+                await delete_by_source_uri(
+                    qdrant=qdrant,
+                    collection=target_collection or settings.assistant_qdrant_collection,
+                    kb_id=kb_id,
+                    source_uri=rel_uri,
+                )
 
             points = await upsert_chunks(
                 qdrant=qdrant,
-                collection=settings.assistant_qdrant_collection,
+                collection=target_collection or settings.assistant_qdrant_collection,
                 kb_id=kb_id,
                 source_uri=rel_uri,
                 vectors=emb.vectors,
                 chunks=chunks,
+                per_chunk_payload=[{"section_path": c.section_path} for c in md_chunks],
                 extra_payload={"content_hash": content_hash},
             )
 
@@ -158,11 +222,37 @@ async def process_job(
                         },
                         "files_total": total_files,
                         "files_done": idx,
+                        "files_skipped": total_skipped,
+                        "files_deleted": total_deleted,
                         "chunks": total_chunks,
                         "points": total_points,
                         "collection_dim": collection_dim,
+                        "collection_alias": settings.assistant_qdrant_collection,
+                        "collection_target": target_collection,
+                        "embed_model": embedder.model_name,
                     },
                 )
+
+        if settings.assistant_cleanup_stale:
+            stale_uris = sorted(set(db_by_uri.keys()) - set(current_source_uris))
+            for uri in stale_uris:
+                await delete_by_source_uri(
+                    qdrant=qdrant,
+                    collection=target_collection or settings.assistant_qdrant_collection,
+                    kb_id=kb_id,
+                    source_uri=uri,
+                )
+                async with sessionmaker() as session:
+                    await delete_document(session=session, kb_id=kb_id, source_uri=uri)
+                total_deleted += 1
+
+        # Atomic switch: point alias to the newly built collection after successful ingest.
+        if target_collection is not None:
+            await set_collection_alias(
+                qdrant=qdrant,
+                alias_name=settings.assistant_qdrant_collection,
+                collection_name=target_collection,
+            )
 
         async with sessionmaker() as session:
             await set_job_succeeded(
@@ -174,9 +264,14 @@ async def process_job(
                         "memory_bank": {"root": str(mb_root), "files": len(mb_files)},
                     },
                     "files_total": total_files,
+                    "files_skipped": total_skipped,
+                    "files_deleted": total_deleted,
                     "chunks": total_chunks,
                     "points": total_points,
                     "collection_dim": collection_dim,
+                    "collection_alias": settings.assistant_qdrant_collection,
+                    "collection_target": target_collection,
+                    "embed_model": embedder.model_name,
                 },
             )
     except Exception as e:

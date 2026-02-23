@@ -1,0 +1,5 @@
+{"id":"assist_quickstart_run","kb_name":"default","query":"Как запустить AIGate Assistant локально через docker compose? Дай шаги.","expected_sources":["docs/ASSISTANT_GUIDE.md"],"top_k":6}
+{"id":"assist_private_memory_bank","kb_name":"default","query":"Как подключить приватный memory-bank для RAG так, чтобы он не попадал в git?","expected_sources":["docs/ASSISTANT_GUIDE.md"],"top_k":6}
+{"id":"aigate_client_headers","kb_name":"default","query":"Какие заголовки и как передавать API key клиенту AIGate?","expected_sources":["docs/CLIENT_GUIDE.md"],"top_k":6}
+{"id":"assistant_chat_example","kb_name":"default","query":"Покажи пример curl запроса к /v1/assistant/chat и что он возвращает.","expected_sources":["docs/ASSISTANT_GUIDE.md"],"top_k":6}
+{"id":"ingest_flow","kb_name":"default","query":"Как запустить ingestion (индексацию) и проверить статус job?","expected_sources":["docs/ASSISTANT_GUIDE.md"],"top_k":6}
