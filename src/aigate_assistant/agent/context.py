@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import httpx
 from qdrant_client.async_qdrant_client import AsyncQdrantClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from aigate_assistant.core.config import AssistantSettings
 from aigate_assistant.rag.embeddings import Embedder
@@ -20,3 +21,7 @@ class RAGGraphContext:
     aigate_http: httpx.AsyncClient
     settings: AssistantSettings
     aigate_api_key_override: str | None = None  # request-level X-AIGATE-API-KEY
+    session: AsyncSession | None = None  # for tools (get_org_usage, explain_request) and ticket_create
+    run_id: str = ""
+    loki_url: str = ""
+    prometheus_url: str = ""

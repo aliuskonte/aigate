@@ -101,10 +101,18 @@ async def run_agent(
         aigate_http=aigate_http,
         settings=settings,
         aigate_api_key_override=x_aigate_api_key,
+        session=session,
+        run_id=run.id,
+        loki_url=settings.assistant_loki_url or "",
+        prometheus_url=settings.assistant_prometheus_url or "",
     )
     graph = build_rag_graph(ctx)
     try:
-        final = await graph.ainvoke({"query": body.message, "kb_id": kb.id})
+        final = await graph.ainvoke({
+            "query": body.message,
+            "kb_id": kb.id,
+            "run_id": run.id,
+        })
     except Exception as e:
         await set_agent_run_finished(
             session=session,
@@ -157,11 +165,14 @@ async def run_agent(
                 "model": final.get("model"),
                 "sources": final.get("sources"),
                 "steps_count": len(steps),
+                "tool_calls": final.get("tool_calls"),
+                "tool_results": final.get("tool_results"),
+                "ticket_id": final.get("ticket_id"),
             },
         )
 
-    ticket_id = None
-    if body.create_ticket and not run_error:
+    ticket_id = final.get("ticket_id")  # action_request from graph (if any)
+    if ticket_id is None and body.create_ticket and not run_error:
         ticket = await create_ticket(
             session=session,
             run_id=run.id,
