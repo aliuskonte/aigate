@@ -4,7 +4,7 @@
 
 | Параметр | Значение |
 |----------|----------|
-| **Base URL** | `80.93.60.170:8000` |
+| **Base URL** | `https://aigates.ru` |
 | **API Key** | Получи у администратора |
 
 ## Заголовки
@@ -33,7 +33,7 @@ Content-Type: application/json
 ## Chat (простой запрос)
 
 ```bash
-curl -s -X POST https://api.example.com/v1/chat/completions \
+curl -s -X POST https://aigates.ru/v1/chat/completions \
   -H "Authorization: Bearer <API_KEY>" \
   -H "Content-Type: application/json" \
   -H "X-Timeout: 300" \
@@ -47,7 +47,7 @@ curl -s -X POST https://api.example.com/v1/chat/completions \
 Добавь `"stream": true`:
 
 ```bash
-curl -s -N -X POST https://api.example.com/v1/chat/completions \
+curl -s -N -X POST https://aigates.ru/v1/chat/completions \
   -H "Authorization: Bearer <API_KEY>" \
   -H "Content-Type: application/json" \
   -H "X-Timeout: 300" \
@@ -112,7 +112,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="<API_KEY>",
-    base_url="https://api.example.com/v1"
+    base_url="https://aigates.ru/v1"
 )
 
 response = client.chat.completions.create(
