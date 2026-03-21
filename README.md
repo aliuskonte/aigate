@@ -251,6 +251,8 @@ Workflow `.github/workflows/deploy.yml`: тесты → SSH на VPS → `cd /op
 
 ### Доступ
 
+Порты на хосте проброшены только на **127.0.0.1** (не слушают публичный интерфейс VPS). С другой машины используй **SSH-туннель** (ниже). Локально на той же машине, где крутится compose, URL из таблицы работают как раньше.
+
 | Сервис | URL | Описание |
 |--------|-----|----------|
 | Grafana | http://localhost:3000 | Дашборды (admin/admin) |
@@ -259,13 +261,19 @@ Workflow `.github/workflows/deploy.yml`: тесты → SSH на VPS → `cd /op
 
 ### Доступ к Grafana на VPS (SSH-туннель)
 
-Если мониторинг запущен на VPS, Grafana доступна через SSH-туннель:
+На VPS Grafana/Prometheus/Loki слушают только **localhost**; с ноутбука открой туннель:
 
 ```bash
-ssh -L 3000:localhost:3000 user@VPS_IP
+ssh -L 3000:127.0.0.1:3000 user@VPS_IP
 ```
 
-Затем открой в браузере http://localhost:3000
+При необходимости Prometheus/Loki с той же машины:
+
+```bash
+ssh -L 9090:127.0.0.1:9090 -L 3100:127.0.0.1:3100 user@VPS_IP
+```
+
+Затем в браузере: http://localhost:3000 (и при открытых портах — http://localhost:9090, http://localhost:3100).
 
 ### Метрики AIGate
 
