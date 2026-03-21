@@ -1,16 +1,10 @@
-# Monitoring stack: Loki, Promtail, Prometheus, Grafana
-# Requires network aigate_monitoring (created by docker-compose.yml)
-# Run: docker compose up -d  (creates network)
-#      docker compose -f docker-compose.monitoring.yml up -d
-# Grafana Cloud: задай LOKI_URL, LOKI_API_TOKEN, PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_API_TOKEN в .env
-
 services:
   loki:
     image: grafana/loki:2.9.0
     container_name: loki
     restart: unless-stopped
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     volumes:
       - ./monitoring/loki/loki-config.yaml:/etc/loki/local-config.yaml
       - loki_data:/loki
@@ -23,7 +17,7 @@ services:
     container_name: promtail
     restart: unless-stopped
     ports:
-      - "9080:9080"
+      - "127.0.0.1:9080:9080"
     env_file:
       - .env
     volumes:
@@ -42,7 +36,7 @@ services:
     container_name: prometheus
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     env_file:
       - .env
     volumes:
@@ -58,7 +52,7 @@ services:
     container_name: grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin

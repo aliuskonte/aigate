@@ -12,3 +12,5 @@ Pipfile.lock
 memory-bank/
 .c*
 env.prod
+/AGENTS.md
+/.aiassistant/
