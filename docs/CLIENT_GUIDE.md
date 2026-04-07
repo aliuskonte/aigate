@@ -137,6 +137,60 @@ print(response.choices[0].message.content)
 
 ---
 
+## Provider-specific parameters (`extra_body`)
+
+Для передачи нестандартных параметров провайдера (не входящих в OpenAI-спеку) используй поле `extra_body`.
+Содержимое мержится в тело запроса к провайдеру as-is.
+
+**Запрещённые ключи** (уже управляются основными полями): `model`, `messages`, `temperature`, `stream`.
+
+### Пример: Deep Thinking (Qwen3+)
+
+```bash
+curl -s -X POST https://aigates.ru/v1/chat/completions \
+  -H "Authorization: Bearer <API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen:qwen-plus",
+    "messages": [{"role": "user", "content": "Реши задачу: ..."}],
+    "extra_body": {"enable_thinking": true, "thinking_budget": 4096}
+  }' | jq
+```
+
+В ответе chain-of-thought будет в поле `reasoning_content`:
+
+```json
+{
+  "choices": [{
+    "message": {
+      "role": "assistant",
+      "content": "Ответ: 42",
+      "reasoning_content": "Рассмотрим задачу поэтапно..."
+    }
+  }]
+}
+```
+
+### Python (OpenAI SDK)
+
+```python
+response = client.chat.completions.create(
+    model="qwen:qwen-plus",
+    messages=[{"role": "user", "content": "Реши задачу: ..."}],
+    extra_body={"enable_thinking": True, "thinking_budget": 4096},
+)
+print(response.choices[0].message.reasoning_content)  # chain-of-thought
+print(response.choices[0].message.content)             # финальный ответ
+```
+
+### Другие параметры
+
+Через `extra_body` можно передать любой параметр DashScope:
+`enable_search`, `search_options`, `top_k`, `repetition_penalty`, `response_format` и т.д.
+Полный список: [Qwen OpenAI Chat API](https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions).
+
+---
+
 ## Rate limit
 
 По умолчанию: 60 запросов в минуту на организацию. При превышении: HTTP 429, заголовок `Retry-After`.

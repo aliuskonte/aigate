@@ -13,4 +13,5 @@ memory-bank/
 .c*
 env.prod
 /AGENTS.md
-/.aiassistant/
+/.a*
+/.idea/*
