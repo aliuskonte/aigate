@@ -100,6 +100,8 @@ class QwenAdapter(ProviderAdapter):
         }
         if req.temperature is not None:
             payload["temperature"] = req.temperature
+        if req.extra_body:
+            payload.update(req.extra_body)
 
         timeout = (
             httpx.Timeout(timeout_seconds, connect=10.0) if timeout_seconds is not None else None
@@ -132,10 +134,15 @@ class QwenAdapter(ProviderAdapter):
         choices: list[Choice] = []
         for ch in data.get("choices") or []:
             msg = ch.get("message") or {}
+            reasoning = msg.get("reasoning_content")
             choices.append(
                 Choice(
                     index=int(ch.get("index") or 0),
-                    message=Message(role=_as_role(msg.get("role")), content=_safe_text(msg.get("content"))),
+                    message=Message(
+                        role=_as_role(msg.get("role")),
+                        content=_safe_text(msg.get("content")),
+                        reasoning_content=reasoning if reasoning else None,
+                    ),
                     finish_reason=ch.get("finish_reason"),
                 )
             )
@@ -166,6 +173,8 @@ class QwenAdapter(ProviderAdapter):
         }
         if req.temperature is not None:
             payload["temperature"] = req.temperature
+        if req.extra_body:
+            payload.update(req.extra_body)
 
         timeout = (
             httpx.Timeout(timeout_seconds, connect=10.0) if timeout_seconds is not None else None
